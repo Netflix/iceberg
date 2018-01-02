@@ -19,38 +19,35 @@ package com.netflix.iceberg.spark.data;
 import com.google.common.collect.Lists;
 import com.netflix.iceberg.Files;
 import com.netflix.iceberg.Schema;
-import com.netflix.iceberg.avro.Avro;
-import com.netflix.iceberg.avro.AvroIterable;
 import com.netflix.iceberg.io.FileAppender;
-import org.apache.avro.generic.GenericData.Record;
+import com.netflix.iceberg.parquet.Parquet;
+import com.netflix.iceberg.parquet.ParquetIterable;
+import org.apache.avro.generic.GenericData;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.Assert;
-
 import java.io.File;
 import java.io.IOException;
 import java.util.List;
 
 import static com.netflix.iceberg.spark.data.TestHelpers.assertEqualsUnsafe;
 
-public class TestSparkAvroReader extends AvroDataTest {
+public class TestSparkParquetReader extends AvroDataTest {
   protected void writeAndValidate(Schema schema) throws IOException {
-    List<Record> expected = RandomData.generateList(schema, 100, 0L);
+    List<GenericData.Record> expected = RandomData.generateList(schema, 100, 0L);
 
     File testFile = temp.newFile();
     Assert.assertTrue("Delete should succeed", testFile.delete());
 
-    try (FileAppender<Record> writer = Avro.write(Files.localOutput(testFile))
+    try (FileAppender<GenericData.Record> writer = Parquet.write(Files.localOutput(testFile))
         .schema(schema)
         .named("test")
         .build()) {
-      for (Record rec : expected) {
-        writer.add(rec);
-      }
+      writer.addAll(expected);
     }
 
     List<InternalRow> rows;
-    try (AvroIterable<InternalRow> reader = Avro.read(Files.localInput(testFile))
-        .createReaderFunc(SparkAvroReader::new)
+    try (ParquetIterable<InternalRow> reader = Parquet.read(Files.localInput(testFile))
+        //.readSupport(SparkAvroReader::new)
         .project(schema)
         .build()) {
       rows = Lists.newArrayList(reader);

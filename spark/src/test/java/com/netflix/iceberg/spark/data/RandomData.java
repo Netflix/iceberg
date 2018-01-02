@@ -39,13 +39,14 @@ import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
+import java.util.NoSuchElementException;
 import java.util.Random;
 import java.util.Set;
 import java.util.UUID;
 import java.util.function.Supplier;
 
 public class RandomData {
-  public static List<Record> generate(Schema schema, int numRecords, long seed) {
+  public static List<Record> generateList(Schema schema, int numRecords, long seed) {
     RandomDataGenerator generator = new RandomDataGenerator(schema, seed);
     List<Record> records = Lists.newArrayListWithExpectedSize(numRecords);
     for (int i = 0; i < numRecords; i += 1) {
@@ -69,6 +70,27 @@ public class RandomData {
       public InternalRow next() {
         rowsLeft -= 1;
         return (InternalRow) TypeUtil.visit(schema, generator);
+      }
+    };
+  }
+
+  public static Iterable<Record> generate(Schema schema, int numRecords, long seed) {
+    return () -> new Iterator<Record>() {
+      private RandomDataGenerator generator = new RandomDataGenerator(schema, seed);
+      private int count = 0;
+
+      @Override
+      public boolean hasNext() {
+        return count < numRecords;
+      }
+
+      @Override
+      public Record next() {
+        if (count >= numRecords) {
+          throw new NoSuchElementException();
+        }
+        count += 1;
+        return (Record) TypeUtil.visit(schema, generator);
       }
     };
   }
