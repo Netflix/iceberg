@@ -23,10 +23,14 @@ import com.netflix.iceberg.types.Type;
 import com.netflix.iceberg.types.Types;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
+import org.apache.orc.storage.serde2.io.DateWritable;
 import org.apache.spark.sql.Row;
 import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.SpecializedGetters;
 import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
 import org.apache.spark.sql.catalyst.util.ArrayData;
+import org.apache.spark.sql.catalyst.util.DateTimeUtils;
+import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.unsafe.types.UTF8String;
 import org.junit.Assert;
@@ -278,6 +282,291 @@ public class TestHelpers {
       case TIME:
       default:
         throw new IllegalArgumentException("Not a supported type: " + type);
+    }
+  }
+
+  /**
+   * Check that the given InternalRow is equivalent to the Row.
+   * @param prefix context for error messages
+   * @param type the type of the row
+   * @param expected the expected value of the row
+   * @param actual the actual value of the row
+   */
+  public static void assertEquals(String prefix, Types.StructType type,
+                                  InternalRow expected, Row actual) {
+    if (expected == null || actual == null) {
+      Assert.assertEquals(prefix, expected, actual);
+    } else {
+      List<Types.NestedField> fields = type.fields();
+      for (int c = 0; c < fields.size(); ++c) {
+        String fieldName = fields.get(c).name();
+        Type childType = fields.get(c).type();
+        switch (childType.typeId()) {
+          case BOOLEAN:
+          case INTEGER:
+          case LONG:
+          case STRING:
+          case DECIMAL:
+          case DATE:
+          case TIMESTAMP:
+            Assert.assertEquals(prefix + "." + fieldName + " - " + childType,
+                getPrimativeValue(expected, c, childType),
+                getPrimativeValue(actual, c, childType));
+            break;
+          case FLOAT:
+          case DOUBLE:
+            assertEqualsDouble(prefix + "." + fieldName,
+                (Double) getPrimativeValue(expected, c, childType),
+                (Double) getPrimativeValue(actual, c, childType));
+            break;
+          case UUID:
+          case FIXED:
+          case BINARY:
+            assertEqualBytes(prefix + "." + fieldName,
+                (byte[]) getPrimativeValue(expected, c, childType),
+                (byte[]) actual.get(c));
+            break;
+          case STRUCT: {
+            Types.StructType st = (Types.StructType) childType;
+            assertEquals(prefix + "." + fieldName, st,
+                expected.getStruct(c, st.fields().size()), actual.getStruct(c));
+            break;
+          }
+          case LIST:
+            compareLists(prefix + "." + fieldName, childType.asListType(),
+                expected.getArray(c),
+                toList((Seq<?>) actual.get(c)));
+            break;
+          case MAP:
+            compareMaps(prefix + "." + fieldName, childType.asMapType(), expected.getMap(c),
+                actual.getMap(c));
+            break;
+          default:
+            throw new IllegalArgumentException("Unhandled type " + childType);
+        }
+      }
+    }
+  }
+
+  private static void compareLists(String prefix, Types.ListType type,
+                                   ArrayData expected, List actual) {
+    if (expected == null || actual == null) {
+      Assert.assertEquals(prefix, expected, actual);
+    } else {
+      Assert.assertEquals(prefix + " length", expected.numElements(), actual.size());
+      Type childType = type.elementType();
+      for (int e = 0; e < expected.numElements(); ++e) {
+        switch (childType.typeId()) {
+          case BOOLEAN:
+          case INTEGER:
+          case LONG:
+          case STRING:
+          case DECIMAL:
+          case DATE:
+          case TIMESTAMP:
+            Assert.assertEquals(prefix + ".elem " + e + " - " + childType,
+                getPrimativeValue(expected, e, childType),
+                actual.get(e));
+            break;
+          case FLOAT:
+          case DOUBLE:
+            assertEqualsDouble(prefix + ".elem " + e,
+                (Double) getPrimativeValue(expected, e, childType),
+                toDouble(actual.get(e)));
+            break;
+          case UUID:
+          case FIXED:
+          case BINARY:
+            assertEqualBytes(prefix + ".elem " + e,
+                (byte[]) getPrimativeValue(expected, e, childType),
+                (byte[]) actual.get(e));
+            break;
+          case STRUCT: {
+            Types.StructType st = (Types.StructType) childType;
+            assertEquals(prefix + ".elem " + e, st,
+                expected.getStruct(e, st.fields().size()), (Row) actual.get(e));
+            break;
+          }
+          case LIST:
+            compareLists(prefix + ".elem " + e, childType.asListType(),
+                expected.getArray(e),
+                toList((Seq<?>) actual.get(e)));
+            break;
+          case MAP:
+            compareMaps(prefix + ".elem " + e, childType.asMapType(),
+                expected.getMap(e), (scala.collection.Map) actual.get(e));
+            break;
+          default:
+            throw new IllegalArgumentException("Unhandled type " + childType);
+        }
+      }
+    }
+  }
+
+  private static void compareMaps(String prefix, Types.MapType type,
+                                  MapData expected, scala.collection.Map actual) {
+    if (expected == null || actual == null) {
+      Assert.assertEquals(prefix, expected, actual);
+    } else {
+      Map javaMap = mapAsJavaMapConverter((scala.collection.Map<String, ?>) actual).asJava();
+      Type keyType = type.keyType();
+      Type valueType = type.valueType();
+      ArrayData expectedKeyArray = expected.keyArray();
+      ArrayData expectedValueArray = expected.valueArray();
+      Assert.assertEquals(prefix + " length", expected.numElements(), javaMap.size());
+      for (int e = 0; e < expected.numElements(); ++e) {
+        Object expectedKey = getPrimativeValue(expectedKeyArray, e, keyType);
+        Object actualValue = javaMap.get(expectedKey);
+        if (actualValue == null) {
+          Assert.assertEquals(prefix + ".key=" + expectedKey + " has null", true,
+              expected.valueArray().isNullAt(e));
+        } else {
+          switch (valueType.typeId()) {
+            case BOOLEAN:
+            case INTEGER:
+            case LONG:
+            case STRING:
+            case DECIMAL:
+            case DATE:
+            case TIMESTAMP:
+              Assert.assertEquals(prefix + ".key=" + expectedKey + " - " + valueType,
+                  getPrimativeValue(expectedValueArray, e, valueType),
+                  javaMap.get(expectedKey));
+              break;
+            case FLOAT:
+            case DOUBLE:
+              assertEqualsDouble(prefix + ".key=" + expectedKey,
+                  (Double) getPrimativeValue(expectedValueArray, e, valueType),
+                  (Double) javaMap.get(expectedKey));
+              break;
+            case UUID:
+            case FIXED:
+            case BINARY:
+              assertEqualBytes(prefix + ".key=" + expectedKey,
+                  (byte[]) getPrimativeValue(expectedValueArray, e, valueType),
+                  (byte[]) javaMap.get(expectedKey));
+              break;
+            case STRUCT: {
+              Types.StructType st = (Types.StructType) valueType;
+              assertEquals(prefix + ".key=" + expectedKey, st,
+                  expectedValueArray.getStruct(e, st.fields().size()),
+                  (Row) javaMap.get(expectedKey));
+              break;
+            }
+            case LIST:
+              compareLists(prefix + ".key=" + expectedKey, valueType.asListType(),
+                  expectedValueArray.getArray(e),
+                  toList((Seq<?>) javaMap.get(expectedKey)));
+              break;
+            case MAP:
+              compareMaps(prefix + ".key=" + expectedKey, valueType.asMapType(),
+                  expectedValueArray.getMap(e),
+                  (scala.collection.Map) javaMap.get(expectedKey));
+              break;
+            default:
+              throw new IllegalArgumentException("Unhandled type " + valueType);
+          }
+        }
+      }
+    }
+  }
+
+  private static void assertEqualsDouble(String context, Double expect,
+                                         Double actual) {
+    if (expect == null && actual == null) {
+      return;
+    }
+    Assert.assertEquals(context, expect, actual, 0.00001);
+  }
+
+  private static Object getPrimativeValue(SpecializedGetters container, int ord,
+                                          Type type) {
+    if (container.isNullAt(ord)) {
+      return null;
+    }
+    switch (type.typeId()) {
+      case BOOLEAN:
+        return container.getBoolean(ord);
+      case INTEGER:
+        return container.getInt(ord);
+      case LONG:
+        return container.getLong(ord);
+      case FLOAT:
+        return (double) container.getFloat(ord);
+      case DOUBLE:
+        return container.getDouble(ord);
+      case STRING:
+        return container.getUTF8String(ord).toString();
+      case BINARY:
+      case FIXED:
+      case UUID:
+        return container.getBinary(ord);
+      case DATE:
+        return new DateWritable(container.getInt(ord)).get();
+      case TIMESTAMP:
+        return DateTimeUtils.toJavaTimestamp(container.getLong(ord));
+      case DECIMAL: {
+        Types.DecimalType dt = (Types.DecimalType) type;
+        return container.getDecimal(ord, dt.precision(), dt.scale()).toJavaBigDecimal();
+      }
+      default:
+        throw new IllegalArgumentException("Unhandled type " + type);
+    }
+  }
+
+  private static Object getPrimativeValue(Row row, int ord, Type type) {
+    if (row.isNullAt(ord)) {
+      return null;
+    }
+    switch (type.typeId()) {
+      case BOOLEAN:
+        return row.getBoolean(ord);
+      case INTEGER:
+        return row.getInt(ord);
+      case LONG:
+        return row.getLong(ord);
+      case FLOAT:
+        return (double) row.getFloat(ord);
+      case DOUBLE:
+        return row.getDouble(ord);
+      case STRING:
+        return row.getString(ord);
+      case BINARY:
+      case FIXED:
+      case UUID:
+        return row.get(ord);
+      case DATE:
+        return row.getDate(ord);
+      case TIMESTAMP:
+        return row.getTimestamp(ord);
+      case DECIMAL:
+        return row.getDecimal(ord);
+      default:
+        throw new IllegalArgumentException("Unhandled type " + type);
+    }
+  }
+
+  private static Double toDouble(Object val) {
+    if (val == null) {
+      return null;
+    } else if (val instanceof Float) {
+      return (double) ((Float)val);
+    } else if (val instanceof Double) {
+      return (Double) val;
+    }
+    throw new IllegalArgumentException("Can't convert " + val + " to Double.");
+  }
+
+  private static List toList(Seq<?> val) {
+    return val == null ? null : seqAsJavaListConverter(val).asJava();
+  }
+
+  private static void assertEqualBytes(String context, byte[] expected,
+                                       byte[] actual) {
+    if (expected == null || actual == null) {
+      Assert.assertEquals(context, expected, actual);
+    } else {
+      Assert.assertArrayEquals(context, expected, actual);
     }
   }
 }
