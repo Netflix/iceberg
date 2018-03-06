@@ -12,10 +12,10 @@
  * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
  * See the License for the specific language governing permissions and
  * limitations under the License.
- */package com.netflix.iceberg.orc;
+ */
+package com.netflix.iceberg.orc;
 
 import com.netflix.iceberg.Metrics;
-import com.netflix.iceberg.PartitionSpec;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.io.FileAppender;
 import com.netflix.iceberg.io.OutputFile;
@@ -28,10 +28,7 @@ import org.apache.orc.Writer;
 
 import java.io.IOException;
 import java.nio.ByteBuffer;
-import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
-import java.util.List;
 import java.util.Map;
 
 /**
@@ -40,21 +37,10 @@ import java.util.Map;
 public class OrcFileAppender implements FileAppender<VectorizedRowBatch> {
   private final Writer writer;
   private final TypeDescription orcSchema;
-  private final List<Integer> columnIds = new ArrayList<>();
+  private final ColumnIdMap columnIds = new ColumnIdMap();
   private final Path path;
 
   public static final String COLUMN_NUMBERS_ATTRIBUTE = "iceberg.column.ids";
-
-  static ByteBuffer buidIdString(List<Integer> list) {
-    StringBuilder buffer = new StringBuilder();
-    for(int i=0; i < list.size(); ++i) {
-      if (i != 0) {
-        buffer.append(',');
-      }
-      buffer.append(list.get(i));
-    }
-    return ByteBuffer.wrap(buffer.toString().getBytes(StandardCharsets.UTF_8));
-  }
 
   OrcFileAppender(Schema schema,
                   OutputFile file,
@@ -68,7 +54,7 @@ public class OrcFileAppender implements FileAppender<VectorizedRowBatch> {
     } catch (IOException e) {
       throw new RuntimeException("Can't create file " + path, e);
     }
-    writer.addUserMetadata(COLUMN_NUMBERS_ATTRIBUTE, buidIdString(columnIds));
+    writer.addUserMetadata(COLUMN_NUMBERS_ATTRIBUTE, columnIds.serialize());
     metadata.forEach(
         (key,value) -> writer.addUserMetadata(key, ByteBuffer.wrap(value)));
   }
@@ -90,14 +76,20 @@ public class OrcFileAppender implements FileAppender<VectorizedRowBatch> {
       // we don't currently have columnSizes or distinct counts.
       Map<Integer, Long> valueCounts = new HashMap<>();
       Map<Integer, Long> nullCounts = new HashMap<>();
+      Integer[] icebergIds = new Integer[orcSchema.getMaximumId() + 1];
+      for(TypeDescription type: columnIds.keySet()) {
+        icebergIds[type.getId()] = columnIds.get(type);
+      }
       for(int c=1; c < stats.length; ++c) {
-        int fieldId = columnIds.get(c);
-        valueCounts.put(fieldId, stats[c].getNumberOfValues());
+        if (icebergIds[c] != null) {
+          valueCounts.put(icebergIds[c], stats[c].getNumberOfValues());
+        }
       }
       for(TypeDescription child: orcSchema.getChildren()) {
         int c = child.getId();
-        int fieldId = columnIds.get(c);
-        nullCounts.put(fieldId, rows - stats[c].getNumberOfValues());
+        if (icebergIds[c] != null) {
+          nullCounts.put(icebergIds[c], rows - stats[c].getNumberOfValues());
+        }
       }
       return new Metrics(rows, null, valueCounts, nullCounts);
     } catch (IOException e) {

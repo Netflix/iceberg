@@ -130,7 +130,7 @@ public class ORC {
       try {
         Path path = new Path(file.location());
         Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
-        List<Integer> columnIds = new ArrayList<>();
+        ColumnIdMap columnIds = new ColumnIdMap();
         TypeDescription orcSchema = TypeConversion.toOrc(schema, columnIds);
         Reader.Options options = reader.options();
         if (start != null) {

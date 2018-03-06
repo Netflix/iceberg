@@ -33,68 +33,85 @@ public class TypeConversion {
    * @return the ORC schema
    */
   public static TypeDescription toOrc(Schema schema,
-                                      List<Integer> columnIds) {
-    columnIds.add(0);
-    return toOrc(schema.asStruct(), columnIds);
+                                      ColumnIdMap columnIds) {
+    return toOrc(null, schema.asStruct(), columnIds);
   }
 
-  static TypeDescription toOrc(Type type, List<Integer> columnIds) {
+  static TypeDescription toOrc(Integer fieldId,
+                               Type type,
+                               ColumnIdMap columnIds) {
+    TypeDescription result;
     switch (type.typeId()) {
       case BOOLEAN:
-        return TypeDescription.createBoolean();
+        result = TypeDescription.createBoolean();
+        break;
       case INTEGER:
-        return TypeDescription.createInt();
+        result = TypeDescription.createInt();
+        break;
       case LONG:
-        return TypeDescription.createLong();
+        result = TypeDescription.createLong();
+        break;
       case FLOAT:
-        return TypeDescription.createFloat();
+        result = TypeDescription.createFloat();
+        break;
       case DOUBLE:
-        return TypeDescription.createDouble();
+        result = TypeDescription.createDouble();
+        break;
       case DATE:
-        return TypeDescription.createDate();
+        result = TypeDescription.createDate();
+        break;
       case TIME:
-        return TypeDescription.createInt();
+        result = TypeDescription.createInt();
+        break;
       case TIMESTAMP:
-        return TypeDescription.createTimestamp();
+        result = TypeDescription.createTimestamp();
+        break;
       case STRING:
-        return TypeDescription.createString();
+        result = TypeDescription.createString();
+        break;
       case UUID:
-        return TypeDescription.createBinary();
+        result = TypeDescription.createBinary();
+        break;
       case FIXED:
-        return TypeDescription.createBinary();
+        result = TypeDescription.createBinary();
+        break;
       case BINARY:
-        return TypeDescription.createBinary();
+        result = TypeDescription.createBinary();
+        break;
       case DECIMAL: {
         Types.DecimalType decimal = (Types.DecimalType) type;
-        return TypeDescription.createDecimal()
+        result = TypeDescription.createDecimal()
             .withScale(decimal.scale())
             .withPrecision(decimal.precision());
+        break;
       }
       case STRUCT: {
-        TypeDescription struct = TypeDescription.createStruct();
+        result = TypeDescription.createStruct();
         for(Types.NestedField field: type.asStructType().fields()) {
-          columnIds.add(field.fieldId());
-          struct.addField(field.name(), toOrc(field.type(), columnIds));
+          result.addField(field.name(), toOrc(field.fieldId(), field.type(), columnIds));
         }
-        return struct;
+        break;
       }
       case LIST: {
         Types.ListType list = (Types.ListType) type;
-        columnIds.add(list.elementId());
-        return TypeDescription.createList(toOrc(type.asListType().elementType(),
+        result = TypeDescription.createList(toOrc(list.elementId(), list.elementType(),
             columnIds));
+        break;
       }
       case MAP: {
         Types.MapType map = (Types.MapType) type;
-        columnIds.add(map.keyId());
-        TypeDescription key = toOrc(map.keyType(), columnIds);
-        columnIds.add(map.valueId());
-        return TypeDescription.createMap(key,
-            toOrc(type.asMapType().valueType(), columnIds));
+        TypeDescription key = toOrc(map.keyId(),map.keyType(), columnIds);
+        result = TypeDescription.createMap(key,
+            toOrc(map.valueId(), map.valueType(), columnIds));
+        break;
       }
       default:
         throw new IllegalArgumentException("Unhandled type " + type.typeId());
     }
+    if (fieldId != null) {
+      columnIds.put(result, fieldId);
+    }
+    return result;
   }
 
   /**
@@ -103,11 +120,11 @@ public class TypeConversion {
    * @param columnIds the column ids
    * @return the Iceberg schema
    */
-  public Schema fromOrc(TypeDescription schema, int[] columnIds) {
+  public Schema fromOrc(TypeDescription schema, ColumnIdMap columnIds) {
     return new Schema(convertOrcToType(schema, columnIds).asStructType().fields());
   }
 
-  Type convertOrcToType(TypeDescription schema, int[] columnIds) {
+  Type convertOrcToType(TypeDescription schema, ColumnIdMap columnIds) {
     switch (schema.getCategory()) {
       case BOOLEAN:
         return Types.BooleanType.get();
@@ -140,14 +157,14 @@ public class TypeConversion {
         for (int c=0; c < fieldNames.size(); ++c) {
           String name = fieldNames.get(c);
           TypeDescription type = fieldTypes.get(c);
-          fields.add(Types.NestedField.optional(columnIds[type.getId()], name,
+          fields.add(Types.NestedField.optional(columnIds.get(type), name,
               convertOrcToType(type, columnIds)));
         }
         return Types.StructType.of(fields);
       }
       case LIST: {
         TypeDescription child = schema.getChildren().get(0);
-        return Types.ListType.ofOptional(columnIds[child.getId()],
+        return Types.ListType.ofOptional(columnIds.get(child),
             convertOrcToType(child, columnIds));
       }
       case MAP: {
@@ -157,15 +174,15 @@ public class TypeConversion {
           case STRING:
           case CHAR:
           case VARCHAR:
-            return Types.MapType.ofOptional(columnIds[key.getId()],
-                columnIds[value.getId()], convertOrcToType(value, columnIds));
+            return Types.MapType.ofOptional(columnIds.get(key),
+                columnIds.get(value), convertOrcToType(value, columnIds));
           default:
             throw new IllegalArgumentException("Can't handle maps with " + key +
                 " as key.");
         }
       }
       default:
-        // We don't have an answer for union types -> blech.
+        // We don't have an answer for union types.
         throw new IllegalArgumentException("Can't handle " + schema);
     }
   }

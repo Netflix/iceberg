@@ -19,6 +19,7 @@ package com.netflix.iceberg.spark.data;
 import com.netflix.iceberg.FileScanTask;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.io.InputFile;
+import com.netflix.iceberg.orc.ColumnIdMap;
 import com.netflix.iceberg.orc.ORC;
 import com.netflix.iceberg.orc.OrcIterator;
 import com.netflix.iceberg.orc.TypeConversion;
@@ -78,7 +79,8 @@ public class SparkOrcReader implements Iterator<UnsafeRow>, Closeable {
                         FileScanTask task,
                         Schema readSchema,
                         SerializableConfiguration conf) {
-    orcSchema = TypeConversion.toOrc(readSchema, new ArrayList<>());
+    ColumnIdMap columnIds = new ColumnIdMap();
+    orcSchema = TypeConversion.toOrc(readSchema, columnIds);
     reader = ORC.read(location)
         .split(task.start(), task.length())
         .schema(readSchema)
