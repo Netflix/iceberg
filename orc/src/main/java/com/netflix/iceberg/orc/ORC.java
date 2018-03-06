@@ -18,6 +18,8 @@ package com.netflix.iceberg.orc;
 
 import com.google.common.base.Preconditions;
 import com.netflix.iceberg.Schema;
+import com.netflix.iceberg.hadoop.HadoopInputFile;
+import com.netflix.iceberg.hadoop.HadoopOutputFile;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.io.OutputFile;
 import org.apache.hadoop.conf.Configuration;
@@ -44,13 +46,17 @@ public class ORC {
 
   public static class WriteBuilder {
     private final OutputFile file;
+    private final Configuration conf;
     private Schema schema = null;
-    private Configuration conf = null;
-    private final Properties tableProperties = new Properties();
     private Map<String, byte[]> metadata = new HashMap<>();
 
     private WriteBuilder(OutputFile file) {
       this.file = file;
+      if (file instanceof HadoopOutputFile) {
+        conf = new Configuration(((HadoopOutputFile) file).getConf());
+      } else {
+        conf = new Configuration();
+      }
     }
 
     public WriteBuilder metadata(String property, String value) {
@@ -58,8 +64,8 @@ public class ORC {
       return this;
     }
 
-    public WriteBuilder tableProperties(Properties properties) {
-      tableProperties.putAll(properties);
+    public WriteBuilder config(String property, String value) {
+      conf.set(property, value);
       return this;
     }
 
@@ -68,17 +74,9 @@ public class ORC {
       return this;
     }
 
-    public WriteBuilder conf(Configuration conf) {
-      this.conf = conf;
-      return this;
-    }
-
     public OrcFileAppender build() {
-      if (conf == null) {
-        conf = new Configuration();
-      }
       OrcFile.WriterOptions options =
-          OrcFile.writerOptions(tableProperties, conf);
+          OrcFile.writerOptions(conf);
       return new OrcFileAppender(schema, file, options, metadata);
     }
   }
@@ -89,14 +87,19 @@ public class ORC {
 
   public static class ReadBuilder {
     private final InputFile file;
+    private final Configuration conf;
     private com.netflix.iceberg.Schema schema = null;
     private Long start = null;
     private Long length = null;
-    private Configuration conf = null;
 
     private ReadBuilder(InputFile file) {
       Preconditions.checkNotNull(file, "Input file cannot be null");
       this.file = file;
+      if (file instanceof HadoopInputFile) {
+        conf = new Configuration(((HadoopInputFile) file).getConf());
+      } else {
+        conf = new Configuration();
+      }
     }
 
     /**
@@ -117,8 +120,8 @@ public class ORC {
       return this;
     }
 
-    public ReadBuilder conf(Configuration conf) {
-      this.conf = conf;
+    public ReadBuilder config(String property, String value) {
+      conf.set(property, value);
       return this;
     }
 
@@ -126,9 +129,6 @@ public class ORC {
       Preconditions.checkNotNull(schema, "Schema is required");
       try {
         Path path = new Path(file.location());
-        if (conf == null) {
-          conf = new Configuration();
-        }
         Reader reader = OrcFile.createReader(path, OrcFile.readerOptions(conf));
         List<Integer> columnIds = new ArrayList<>();
         TypeDescription orcSchema = TypeConversion.toOrc(schema, columnIds);

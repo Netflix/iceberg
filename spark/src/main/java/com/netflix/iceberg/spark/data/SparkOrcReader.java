@@ -82,7 +82,6 @@ public class SparkOrcReader implements Iterator<UnsafeRow>, Closeable {
     reader = ORC.read(location)
         .split(task.start(), task.length())
         .schema(readSchema)
-        .conf(conf.value())
         .build();
     int numFields = readSchema.columns().size();
     row = new UnsafeRow(numFields);
