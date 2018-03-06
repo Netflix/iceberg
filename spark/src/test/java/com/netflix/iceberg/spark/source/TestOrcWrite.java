@@ -77,7 +77,7 @@ public class TestOrcWrite {
     PartitionSpec spec = PartitionSpec.builderFor(SCHEMA).identity("data").build();
     Table table = tables.create(SCHEMA, spec, location.toString());
     table.updateProperties()
-        .format(FileFormat.ORC)
+        .defaultFormat(FileFormat.ORC)
         .set(OrcConf.COMPRESS.getAttribute(), CompressionKind.NONE.name())
         .commit();
 

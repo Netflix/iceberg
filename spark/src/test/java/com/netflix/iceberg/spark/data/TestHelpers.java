@@ -333,12 +333,12 @@ public class TestHelpers {
             break;
           }
           case LIST:
-            compareLists(prefix + "." + fieldName, childType.asListType(),
+            assertEqualsLists(prefix + "." + fieldName, childType.asListType(),
                 expected.getArray(c),
                 toList((Seq<?>) actual.get(c)));
             break;
           case MAP:
-            compareMaps(prefix + "." + fieldName, childType.asMapType(), expected.getMap(c),
+            assertEqualsMaps(prefix + "." + fieldName, childType.asMapType(), expected.getMap(c),
                 actual.getMap(c));
             break;
           default:
@@ -348,8 +348,8 @@ public class TestHelpers {
     }
   }
 
-  private static void compareLists(String prefix, Types.ListType type,
-                                   ArrayData expected, List actual) {
+  private static void assertEqualsLists(String prefix, Types.ListType type,
+                                        ArrayData expected, List actual) {
     if (expected == null || actual == null) {
       Assert.assertEquals(prefix, expected, actual);
     } else {
@@ -388,12 +388,12 @@ public class TestHelpers {
             break;
           }
           case LIST:
-            compareLists(prefix + ".elem " + e, childType.asListType(),
+            assertEqualsLists(prefix + ".elem " + e, childType.asListType(),
                 expected.getArray(e),
                 toList((Seq<?>) actual.get(e)));
             break;
           case MAP:
-            compareMaps(prefix + ".elem " + e, childType.asMapType(),
+            assertEqualsMaps(prefix + ".elem " + e, childType.asMapType(),
                 expected.getMap(e), (scala.collection.Map) actual.get(e));
             break;
           default:
@@ -403,8 +403,8 @@ public class TestHelpers {
     }
   }
 
-  private static void compareMaps(String prefix, Types.MapType type,
-                                  MapData expected, scala.collection.Map actual) {
+  private static void assertEqualsMaps(String prefix, Types.MapType type,
+                                       MapData expected, scala.collection.Map actual) {
     if (expected == null || actual == null) {
       Assert.assertEquals(prefix, expected, actual);
     } else {
@@ -454,12 +454,13 @@ public class TestHelpers {
               break;
             }
             case LIST:
-              compareLists(prefix + ".key=" + expectedKey, valueType.asListType(),
+              assertEqualsLists(prefix + ".key=" + expectedKey,
+                  valueType.asListType(),
                   expectedValueArray.getArray(e),
                   toList((Seq<?>) javaMap.get(expectedKey)));
               break;
             case MAP:
-              compareMaps(prefix + ".key=" + expectedKey, valueType.asMapType(),
+              assertEqualsMaps(prefix + ".key=" + expectedKey, valueType.asMapType(),
                   expectedValueArray.getMap(e),
                   (scala.collection.Map) javaMap.get(expectedKey));
               break;

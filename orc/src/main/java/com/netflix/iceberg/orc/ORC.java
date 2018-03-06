@@ -17,7 +17,6 @@
 package com.netflix.iceberg.orc;
 
 import com.google.common.base.Preconditions;
-import com.netflix.iceberg.PartitionSpec;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.io.OutputFile;
@@ -46,18 +45,12 @@ public class ORC {
   public static class WriteBuilder {
     private final OutputFile file;
     private Schema schema = null;
-    private PartitionSpec spec = null;
     private Configuration conf = null;
     private final Properties tableProperties = new Properties();
     private Map<String, byte[]> metadata = new HashMap<>();
 
     private WriteBuilder(OutputFile file) {
       this.file = file;
-    }
-
-    public WriteBuilder partitionSpec(PartitionSpec spec) {
-      this.spec = spec;
-      return this;
     }
 
     public WriteBuilder metadata(String property, String value) {
@@ -81,13 +74,12 @@ public class ORC {
     }
 
     public OrcFileAppender build() {
-      Preconditions.checkNotNull(schema, "PartitionSpec is required");
       if (conf == null) {
         conf = new Configuration();
       }
       OrcFile.WriterOptions options =
           OrcFile.writerOptions(tableProperties, conf);
-      return new OrcFileAppender(schema, spec, file, options, metadata);
+      return new OrcFileAppender(schema, file, options, metadata);
     }
   }
 

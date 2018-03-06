@@ -137,7 +137,7 @@ public class TypeConversion {
         List<String> fieldNames = schema.getFieldNames();
         List<TypeDescription> fieldTypes = schema.getChildren();
         List<Types.NestedField> fields = new ArrayList<>(fieldNames.size());
-        for(int c=0; c < fieldNames.size(); ++c) {
+        for (int c=0; c < fieldNames.size(); ++c) {
           String name = fieldNames.get(c);
           TypeDescription type = fieldTypes.get(c);
           fields.add(Types.NestedField.optional(columnIds[type.getId()], name,

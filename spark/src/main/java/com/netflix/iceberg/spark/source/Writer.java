@@ -248,7 +248,6 @@ class Writer implements DataSourceV2Writer, SupportsWriteInternalRow {
               @SuppressWarnings("unchecked")
               SparkOrcWriter writer = new SparkOrcWriter(ORC.write(file)
                   .schema(schema)
-                  .partitionSpec(spec)
                   .conf(conf.value())
                   .build());
               return (FileAppender<T>) writer;

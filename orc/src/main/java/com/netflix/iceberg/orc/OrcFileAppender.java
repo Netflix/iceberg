@@ -57,7 +57,6 @@ public class OrcFileAppender implements FileAppender<VectorizedRowBatch> {
   }
 
   OrcFileAppender(Schema schema,
-                  PartitionSpec spec,
                   OutputFile file,
                   OrcFile.WriterOptions options,
                   Map<String,byte[]> metadata) {

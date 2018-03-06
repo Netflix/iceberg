@@ -69,7 +69,7 @@ class PropertiesUpdate implements UpdateProperties {
   }
 
   @Override
-  public UpdateProperties format(FileFormat format) {
+  public UpdateProperties defaultFormat(FileFormat format) {
     set(TableProperties.DEFAULT_FILE_FORMAT, format.name());
     return this;
   }
