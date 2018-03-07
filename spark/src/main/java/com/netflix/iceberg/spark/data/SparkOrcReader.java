@@ -43,7 +43,6 @@ import org.apache.spark.sql.catalyst.expressions.codegen.BufferHolder;
 import org.apache.spark.sql.catalyst.expressions.codegen.UnsafeArrayWriter;
 import org.apache.spark.sql.catalyst.expressions.codegen.UnsafeRowWriter;
 import org.apache.spark.sql.catalyst.util.ArrayData;
-import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.apache.spark.sql.catalyst.util.MapData;
 import org.apache.spark.sql.types.Decimal;
 import org.apache.spark.unsafe.Platform;
@@ -54,7 +53,6 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.sql.Timestamp;
-import java.util.ArrayList;
 import java.util.Iterator;
 import java.util.List;
 
@@ -561,15 +559,14 @@ public class SparkOrcReader implements Iterator<UnsafeRow>, Closeable {
    * This can be replaced when we upgrade to storage-api 2.5.0.
    */
   static class DecimalHack extends FastHiveDecimal {
-    private static final DecimalHack tmp = new DecimalHack();
-
-    static long unscaledLong(FastHiveDecimal value) {
-      tmp.fastSet(value);
-      return tmp.fastSignum * tmp.fast1 * 10_000_000_000_000_000L + tmp.fast0;
+    long unscaledLong(FastHiveDecimal value) {
+      fastSet(value);
+      return fastSignum * fast1 * 10_000_000_000_000_000L + fast0;
     }
   }
 
   private static class Decimal18Converter implements Converter {
+    final DecimalHack hack = new DecimalHack();
     final int precision;
     final int scale;
 
@@ -589,7 +586,7 @@ public class SparkOrcReader implements Iterator<UnsafeRow>, Closeable {
       } else {
         HiveDecimalWritable v = ((DecimalColumnVector) vector).vector[row];
         writer.write(column,
-            new Decimal().set(DecimalHack.unscaledLong(v), precision, v.scale()),
+            new Decimal().set(hack.unscaledLong(v), precision, v.scale()),
             precision, scale);
       }
     }
@@ -605,7 +602,7 @@ public class SparkOrcReader implements Iterator<UnsafeRow>, Closeable {
       } else {
         HiveDecimalWritable v = ((DecimalColumnVector) vector).vector[row];
         writer.write(element,
-            new Decimal().set(DecimalHack.unscaledLong(v), precision, v.scale()),
+            new Decimal().set(hack.unscaledLong(v), precision, v.scale()),
             precision, scale);
       }
     }
