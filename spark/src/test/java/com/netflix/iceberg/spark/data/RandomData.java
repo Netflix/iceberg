@@ -25,9 +25,19 @@ import com.netflix.iceberg.types.TypeUtil;
 import com.netflix.iceberg.types.Types;
 import org.apache.avro.generic.GenericData;
 import org.apache.avro.generic.GenericData.Record;
+import org.apache.spark.sql.catalyst.InternalRow;
+import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
+import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
+import org.apache.spark.sql.catalyst.util.GenericArrayData;
+import org.apache.spark.sql.types.Decimal;
+import org.apache.spark.unsafe.types.UTF8String;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.nio.charset.StandardCharsets;
+import java.util.ArrayList;
+import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Random;
@@ -103,7 +113,7 @@ public class RandomData {
 
       Map<String, Object> result = Maps.newLinkedHashMap();
       for (int i = 0; i < numEntries; i += 1) {
-        String key = randomString(random) + i; // add i to ensure no collisions
+        String key = randomString(random).toString() + i; // add i to ensure no collisions
         // return null 5% of the time when the value is optional
         if (map.isValueOptional() && random.nextInt(20) == 1) {
           result.put(key, null);
@@ -117,138 +127,162 @@ public class RandomData {
 
     @Override
     public Object primitive(Type.PrimitiveType primitive) {
-      int choice = random.nextInt(20);
-
+      Object result = generatePrimitive(primitive, random);
+      // For the primitives that Avro needs a different type than Spark, fix
+      // them here.
       switch (primitive.typeId()) {
-        case BOOLEAN:
-          return choice < 10;
-
-        case INTEGER:
-          switch (choice) {
-            case 1:
-              return Integer.MIN_VALUE;
-            case 2:
-              return Integer.MAX_VALUE;
-            case 3:
-              return 0;
-            default:
-              return random.nextInt();
-          }
-
-        case LONG:
-          switch (choice) {
-            case 1:
-              return Long.MIN_VALUE;
-            case 2:
-              return Long.MAX_VALUE;
-            case 3:
-              return 0L;
-            default:
-              return random.nextLong();
-          }
-
-        case FLOAT:
-          switch (choice) {
-            case 1:
-              return Float.MIN_VALUE;
-            case 2:
-              return -Float.MIN_VALUE;
-            case 3:
-              return Float.MAX_VALUE;
-            case 4:
-              return -Float.MAX_VALUE;
-            case 5:
-              return Float.NEGATIVE_INFINITY;
-            case 6:
-              return Float.POSITIVE_INFINITY;
-            case 7:
-              return 0.0F;
-            case 8:
-              return Float.NaN;
-            default:
-              return random.nextFloat();
-          }
-
-        case DOUBLE:
-          switch (choice) {
-            case 1:
-              return Double.MIN_VALUE;
-            case 2:
-              return -Double.MIN_VALUE;
-            case 3:
-              return Double.MAX_VALUE;
-            case 4:
-              return -Double.MAX_VALUE;
-            case 5:
-              return Double.NEGATIVE_INFINITY;
-            case 6:
-              return Double.POSITIVE_INFINITY;
-            case 7:
-              return 0.0D;
-            case 8:
-              return Double.NaN;
-            default:
-              return random.nextDouble();
-          }
-
-        case DATE:
-          // this will include negative values (dates before 1970-01-01)
-          return random.nextInt() % ABOUT_380_YEARS_IN_DAYS;
-
-        case TIME:
-          return (random.nextLong() & Integer.MAX_VALUE) % ONE_DAY_IN_MICROS;
-
-        case TIMESTAMP:
-          return random.nextLong();
-
         case STRING:
-          return randomString(random);
-
-        case UUID:
-          byte[] uuidBytes = new byte[16];
-          random.nextBytes(uuidBytes);
-          // this will hash the uuidBytes
-          return UUID.nameUUIDFromBytes(uuidBytes);
-
+          return ((UTF8String) result).toString();
         case FIXED:
-          byte[] fixed = new byte[((Types.FixedType) primitive).length()];
-          random.nextBytes(fixed);
-          return new GenericData.Fixed(typeToSchema.get(primitive), fixed);
-
+          return new GenericData.Fixed(typeToSchema.get(primitive),
+              (byte[]) result);
         case BINARY:
-          int length = random.nextInt(50);
-          ByteBuffer buffer = ByteBuffer.allocate(length);
-          random.nextBytes(buffer.array());
-          return buffer;
-
+          return ByteBuffer.wrap((byte[]) result);
+        case UUID:
+          return UUID.nameUUIDFromBytes((byte[]) result);
         case DECIMAL:
-          Types.DecimalType decimal = (Types.DecimalType) primitive;
-          return new BigDecimal(randomUnscaled(decimal.precision(), random), decimal.scale());
-
+          return ((Decimal) result).toJavaBigDecimal();
         default:
-          throw new IllegalArgumentException(
-              "Cannot generate random value for unknown type: " + primitive);
+          return result;
       }
     }
   }
 
-  private static int ABOUT_380_YEARS_IN_DAYS = 380 * 365;
-  private static long ONE_DAY_IN_MICROS = 24 * 60 * 60 * 1_000_000;
-  private static String CHARS =
-      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.!?";
+  public static Object generatePrimitive(Type.PrimitiveType primitive,
+                                         Random random) {
+    int choice = random.nextInt(20);
 
-  private static String randomString(Random random) {
-    int length = random.nextInt(50);
-    StringBuilder sb = new StringBuilder();
+    switch (primitive.typeId()) {
+      case BOOLEAN:
+        return choice < 10;
 
-    for (int i = 0; i < length; i += 1) {
-      sb.append(CHARS.charAt(random.nextInt(CHARS.length())));
+      case INTEGER:
+        switch (choice) {
+          case 1:
+            return Integer.MIN_VALUE;
+          case 2:
+            return Integer.MAX_VALUE;
+          case 3:
+            return 0;
+          default:
+            return random.nextInt();
+        }
+
+      case LONG:
+        switch (choice) {
+          case 1:
+            return Long.MIN_VALUE;
+          case 2:
+            return Long.MAX_VALUE;
+          case 3:
+            return 0L;
+          default:
+            return random.nextLong();
+        }
+
+      case FLOAT:
+        switch (choice) {
+          case 1:
+            return Float.MIN_VALUE;
+          case 2:
+            return -Float.MIN_VALUE;
+          case 3:
+            return Float.MAX_VALUE;
+          case 4:
+            return -Float.MAX_VALUE;
+          case 5:
+            return Float.NEGATIVE_INFINITY;
+          case 6:
+            return Float.POSITIVE_INFINITY;
+          case 7:
+            return 0.0F;
+          case 8:
+            return Float.NaN;
+          default:
+            return random.nextFloat();
+        }
+
+      case DOUBLE:
+        switch (choice) {
+          case 1:
+            return Double.MIN_VALUE;
+          case 2:
+            return -Double.MIN_VALUE;
+          case 3:
+            return Double.MAX_VALUE;
+          case 4:
+            return -Double.MAX_VALUE;
+          case 5:
+            return Double.NEGATIVE_INFINITY;
+          case 6:
+            return Double.POSITIVE_INFINITY;
+          case 7:
+            return 0.0D;
+          case 8:
+            return Double.NaN;
+          default:
+            return random.nextDouble();
+        }
+
+      case DATE:
+        // this will include negative values (dates before 1970-01-01)
+        return random.nextInt() % ABOUT_380_YEARS_IN_DAYS;
+
+      case TIME:
+        return (random.nextLong() & Integer.MAX_VALUE) % ONE_DAY_IN_MICROS;
+
+      case TIMESTAMP:
+        return random.nextLong() % FIFTY_YEARS_IN_MICROS;
+
+      case STRING:
+        return randomString(random);
+
+      case UUID:
+        byte[] uuidBytes = new byte[16];
+        random.nextBytes(uuidBytes);
+        // this will hash the uuidBytes
+        return uuidBytes;
+
+      case FIXED:
+        byte[] fixed = new byte[((Types.FixedType) primitive).length()];
+        random.nextBytes(fixed);
+        return fixed;
+
+      case BINARY:
+        byte[] binary = new byte[random.nextInt(50)];
+        random.nextBytes(binary);
+        return binary;
+
+      case DECIMAL:
+        Types.DecimalType type = (Types.DecimalType) primitive;
+        BigInteger unscaled = randomUnscaled(type.precision(), random);
+        return Decimal.apply(new BigDecimal(unscaled, type.scale()));
+
+      default:
+        throw new IllegalArgumentException(
+            "Cannot generate random value for unknown type: " + primitive);
     }
-
-    return sb.toString();
   }
 
-  private static String DIGITS = "0123456789";
+  private static final long FIFTY_YEARS_IN_MICROS =
+      (50L * (365 * 3 + 366) * 24 * 60 * 60 * 1_000_000) / 4;
+  private static final int ABOUT_380_YEARS_IN_DAYS = 380 * 365;
+  private static final long ONE_DAY_IN_MICROS = 24 * 60 * 60 * 1_000_000L;
+  private static final String CHARS =
+      "abcdefghijklmnopqrstuvwxyzABCDEFGHIJKLMNOPQRSTUVWXYZ0123456789_-.!?";
+
+  private static UTF8String randomString(Random random) {
+    int length = random.nextInt(50);
+    byte[] buffer = new byte[length];
+
+    for (int i = 0; i < length; i += 1) {
+      buffer[i] = (byte) CHARS.charAt(random.nextInt(CHARS.length()));
+    }
+
+    return UTF8String.fromBytes(buffer);
+  }
+
+  private static final String DIGITS = "0123456789";
   private static BigInteger randomUnscaled(int precision, Random random) {
     int length = random.nextInt(precision);
     if (length == 0) {
@@ -261,5 +295,177 @@ public class RandomData {
     }
 
     return new BigInteger(sb.toString());
+  }
+
+  public static Iterator<InternalRow> generateSpark(Schema schema,
+                                                    int rows,
+                                                    long seed) {
+    return new Iterator<InternalRow>(){
+      private int rowsLeft = rows;
+      SparkGenerator generator = buildGenerator(schema.asStruct(),
+          new Random(seed), false);
+
+      @Override
+      public boolean hasNext() {
+        return rowsLeft > 0;
+      }
+
+      @Override
+      public InternalRow next() {
+        rowsLeft -= 1;
+        return (InternalRow) generator.next();
+      }
+    };
+  }
+
+  interface SparkGenerator {
+    /**
+     * Generate the next object for Spark.
+     * @return InternalRow, MapData, ArrayData, etc.
+     */
+    Object next();
+  }
+
+  /**
+   * A filter that generates a null 5% of the time.
+   */
+  static class OptionalSparkGenerator implements  SparkGenerator {
+    private final SparkGenerator child;
+    private final Random random;
+
+    OptionalSparkGenerator(SparkGenerator child, Random random) {
+      this.child = child;
+      this.random = random;
+    }
+
+    @Override
+    public Object next() {
+      return random.nextInt(100) < 5 ? null : child.next();
+    }
+  }
+
+  static class PrimitiveSparkGenerator implements SparkGenerator {
+    private final Type.PrimitiveType type;
+    private final Random random;
+
+    PrimitiveSparkGenerator(Type type, Random random) {
+      this.type = (Type.PrimitiveType) type;
+      this.random = random;
+    }
+
+    @Override
+    public Object next() {
+      return generatePrimitive(type, random);
+    }
+  }
+
+  static class StructSparkGenerator implements SparkGenerator {
+    private final SparkGenerator[] children;
+
+    StructSparkGenerator(Type type, Random random) {
+      Types.StructType t = (Types.StructType) type;
+      List<Types.NestedField> fields = t.fields();
+      children = new SparkGenerator[fields.size()];
+      for(int c=0; c < children.length; ++c) {
+        Types.NestedField field = fields.get(c);
+        children[c] = buildGenerator(field.type(), random, field.isOptional());
+      }
+    }
+
+    @Override
+    public Object next() {
+      GenericInternalRow row = new GenericInternalRow(children.length);
+      for(int c=0; c < children.length; ++c) {
+        row.update(c, children[c].next());
+      }
+      return row;
+    }
+  }
+
+  static class ListSparkGenerator implements SparkGenerator {
+    private final Random random;
+    private final SparkGenerator child;
+
+    ListSparkGenerator(Type type, Random random) {
+      this.random = random;
+      Types.ListType t = (Types.ListType) type;
+      child = buildGenerator(t.elementType(), random, t.isElementOptional());
+    }
+
+    @Override
+    public Object next() {
+      int len = random.nextInt(20);
+      GenericArrayData result = new GenericArrayData(new Object[len]);
+      for(int e=0; e < len; ++e) {
+        result.update(e, child.next());
+      }
+      return result;
+    }
+  }
+
+  static class MapSparkGenerator implements SparkGenerator {
+    private final Random random;
+    private final SparkGenerator keyGenerator;
+    private final SparkGenerator valueGenerator;
+
+    MapSparkGenerator(Type type, Random random) {
+      this.random = random;
+      Types.MapType t = (Types.MapType) type;
+      keyGenerator = buildGenerator(t.keyType(), random, false);
+      valueGenerator = buildGenerator(t.valueType(), random, t.isValueOptional());
+    }
+
+    @Override
+    public Object next() {
+      int len = random.nextInt(20);
+      GenericArrayData keys = new GenericArrayData(new Object[len]);
+      GenericArrayData values = new GenericArrayData(new Object[len]);
+      ArrayBasedMapData result = new ArrayBasedMapData(keys, values);
+      List alreadyUsed = new ArrayList(len);
+      for(int e=0; e < len; ++e) {
+        Object key;
+        do {
+          key = keyGenerator.next();
+        } while (alreadyUsed.contains(key));
+        alreadyUsed.add(key);
+        keys.update(e, key);
+        values.update(e, valueGenerator.next());
+      }
+      return result;
+    }
+  }
+
+  static SparkGenerator buildGenerator(Type type, Random random,
+                                       boolean isOptional) {
+    SparkGenerator result;
+    switch (type.typeId()) {
+      case BOOLEAN:
+      case INTEGER:
+      case LONG:
+      case FLOAT:
+      case DOUBLE:
+      case DATE:
+      case TIME:
+      case TIMESTAMP:
+      case STRING:
+      case UUID:
+      case FIXED:
+      case BINARY:
+      case DECIMAL:
+        result = new PrimitiveSparkGenerator(type, random);
+        break;
+      case STRUCT:
+        result = new StructSparkGenerator(type, random);
+        break;
+      case LIST:
+        result = new ListSparkGenerator(type, random);
+        break;
+      case MAP:
+        result = new MapSparkGenerator(type, random);
+        break;
+      default:
+        throw new IllegalArgumentException("Unhandled type " + type);
+    }
+    return isOptional ? new OptionalSparkGenerator(result, random) : result;
   }
 }
