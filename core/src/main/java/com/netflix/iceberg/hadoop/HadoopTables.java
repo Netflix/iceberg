@@ -23,6 +23,10 @@ import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
+/**
+ * Implementation of Iceberg tables that uses the Hadoop FileSystem
+ * to store metadata and manifests.
+ */
 public class HadoopTables implements Tables, Configurable {
   private Configuration conf;
 
@@ -33,6 +37,13 @@ public class HadoopTables implements Tables, Configurable {
     this.conf = conf;
   }
 
+  /**
+   * Loads the table location from a FileSystem path location.
+   *
+   * @param location a path URI (e.g. hdfs:///warehouse/my_table/)
+   * @return
+   */
+  @Override
   public Table load(String location) {
     TableOperations ops = newTableOps(location);
     if (ops.current() == null) {
@@ -42,6 +53,16 @@ public class HadoopTables implements Tables, Configurable {
     return new BaseTable(ops, location);
   }
 
+  /**
+   * Create a table using the FileSystem implementation resolve from
+   * location.
+   *
+   * @param schema
+   * @param spec
+   * @param location a path URI (e.g. hdfs:///warehouse/my_table)
+   * @return
+   */
+  @Override
   public Table create(Schema schema, PartitionSpec spec, String location) {
     TableOperations ops = newTableOps(location);
     if (ops.current() != null) {

@@ -28,16 +28,16 @@ public abstract class BaseMetastoreTables implements Tables {
     this.conf = conf;
   }
 
-  public abstract BaseMetastoreTableOperations newTableOps(Configuration conf, String location);
+  public abstract BaseMetastoreTableOperations newTableOps(Configuration conf, String tableIdentifier);
 
   @Override
-  public Table load(String location) {
-    TableOperations ops = newTableOps(conf, location);
+  public Table load(String tableIdentifier) {
+    TableOperations ops = newTableOps(conf, tableIdentifier);
     if (ops.current() == null) {
-      throw new NoSuchTableException("Table does not exist: " + location);
+      throw new NoSuchTableException("Table does not exist: " + tableIdentifier);
     }
 
-    return new BaseTable(ops, location);
+    return new BaseTable(ops, tableIdentifier);
   }
 
   public Table create(Schema schema, String location) {
@@ -45,18 +45,18 @@ public abstract class BaseMetastoreTables implements Tables {
   }
 
   @Override
-  public Table create(Schema schema, PartitionSpec spec, String location) {
-    TableOperations ops = newTableOps(conf, location);
+  public Table create(Schema schema, PartitionSpec spec, String tableIdentifier) {
+    TableOperations ops = newTableOps(conf, tableIdentifier);
     if (ops.current() != null) {
-      throw new AlreadyExistsException("Table already exists: " + location);
+      throw new AlreadyExistsException("Table already exists: " + tableIdentifier);
     }
 
-    String path = defaultWarehouseLocation(conf, location);
+    String path = defaultWarehouseLocation(conf, tableIdentifier);
     TableMetadata metadata = TableMetadata.newTableMetadata(ops, schema, spec, path);
     ops.commit(null, metadata);
 
-    return new BaseTable(ops, location);
+    return new BaseTable(ops, tableIdentifier);
   }
 
-  abstract String defaultWarehouseLocation(Configuration conf, String location);
+  abstract String defaultWarehouseLocation(Configuration conf, String tableIdentifier);
 }

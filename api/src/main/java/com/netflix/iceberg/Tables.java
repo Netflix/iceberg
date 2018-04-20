@@ -16,8 +16,14 @@
 
 package com.netflix.iceberg;
 
+/**
+ * Generic interface for creating and loading a table implementation.
+ *
+ * The 'tableIdentifier' field should be interpreted by the underlying
+ * implementation (e.g. '<database>.<table>')
+ */
 public interface Tables {
-  Table create(Schema schema, PartitionSpec spec, String location);
+  Table create(Schema schema, PartitionSpec spec, String tableIdentifier);
 
-  Table load(String location);
+  Table load(String tableIdentifier);
 }
