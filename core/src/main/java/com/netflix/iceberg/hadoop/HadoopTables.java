@@ -16,7 +16,13 @@
 
 package com.netflix.iceberg.hadoop;
 
-import com.netflix.iceberg.*;
+import com.netflix.iceberg.BaseTable;
+import com.netflix.iceberg.PartitionSpec;
+import com.netflix.iceberg.Schema;
+import com.netflix.iceberg.Table;
+import com.netflix.iceberg.TableMetadata;
+import com.netflix.iceberg.TableOperations;
+import com.netflix.iceberg.Tables;
 import com.netflix.iceberg.exceptions.AlreadyExistsException;
 import com.netflix.iceberg.exceptions.NoSuchTableException;
 import org.apache.hadoop.conf.Configurable;
