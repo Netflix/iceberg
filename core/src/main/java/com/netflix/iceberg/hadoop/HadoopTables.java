@@ -47,7 +47,7 @@ public class HadoopTables implements Tables, Configurable {
    * Loads the table location from a FileSystem path location.
    *
    * @param location a path URI (e.g. hdfs:///warehouse/my_table/)
-   * @return
+   * @return table implementation
    */
   @Override
   public Table load(String location) {
@@ -63,10 +63,10 @@ public class HadoopTables implements Tables, Configurable {
    * Create a table using the FileSystem implementation resolve from
    * location.
    *
-   * @param schema
-   * @param spec
+   * @param schema iceberg schema used to create the table
+   * @param spec partition specification
    * @param location a path URI (e.g. hdfs:///warehouse/my_table)
-   * @return
+   * @return newly created table implementation
    */
   @Override
   public Table create(Schema schema, PartitionSpec spec, String location) {
