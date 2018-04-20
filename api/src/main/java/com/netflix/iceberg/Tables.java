@@ -16,12 +16,8 @@
 
 package com.netflix.iceberg;
 
-class Tables {
-  public static Table create(String path, Schema schema, PartitionSpec spec) {
-    return null;
-  }
+public interface Tables {
+  Table create(Schema schema, PartitionSpec spec, String location);
 
-  public static Table load(String path) {
-    return null;
-  }
+  Table load(String location);
 }

@@ -21,45 +21,42 @@ import com.netflix.iceberg.exceptions.AlreadyExistsException;
 import com.netflix.iceberg.exceptions.NoSuchTableException;
 import org.apache.hadoop.conf.Configuration;
 
-public abstract class BaseMetastoreTables {
+public abstract class BaseMetastoreTables implements Tables {
   private final Configuration conf;
 
   public BaseMetastoreTables(Configuration conf) {
     this.conf = conf;
   }
 
-  public abstract BaseMetastoreTableOperations newTableOps(Configuration conf, String database, String table);
+  public abstract BaseMetastoreTableOperations newTableOps(Configuration conf, String location);
 
-  public Table load(String database, String table) {
-    TableOperations ops = newTableOps(conf, database, table);
+  @Override
+  public Table load(String location) {
+    TableOperations ops = newTableOps(conf, location);
     if (ops.current() == null) {
-      throw new NoSuchTableException("Table does not exist: " + database + "." + table);
+      throw new NoSuchTableException("Table does not exist: " + location);
     }
 
-    return new BaseTable(ops, database + "." + table);
+    return new BaseTable(ops, location);
   }
 
-  public Table create(Schema schema, String database, String table) {
-    return create(schema, PartitionSpec.unpartitioned(), database, table);
+  public Table create(Schema schema, String location) {
+    return create(schema, PartitionSpec.unpartitioned(), location);
   }
 
-  public Table create(Schema schema, PartitionSpec spec, String database, String table) {
-    TableOperations ops = newTableOps(conf, database, table);
+  @Override
+  public Table create(Schema schema, PartitionSpec spec, String location) {
+    TableOperations ops = newTableOps(conf, location);
     if (ops.current() != null) {
-      throw new AlreadyExistsException("Table already exists: " + database + "." + table);
+      throw new AlreadyExistsException("Table already exists: " + location);
     }
 
-    String location = defaultWarehouseLocation(conf, database, table);
-    TableMetadata metadata = TableMetadata.newTableMetadata(ops, schema, spec, location);
+    String path = defaultWarehouseLocation(conf, location);
+    TableMetadata metadata = TableMetadata.newTableMetadata(ops, schema, spec, path);
     ops.commit(null, metadata);
 
-    return new BaseTable(ops, database + "." + table);
+    return new BaseTable(ops, location);
   }
 
-  private static String defaultWarehouseLocation(Configuration conf, String database, String table) {
-    String warehouseLocation = conf.get("hive.metastore.warehouse.dir");
-    Preconditions.checkNotNull(warehouseLocation,
-        "Warehouse location is not set: hive.metastore.warehouse.dir=null");
-    return String.format("%s/%s.db/%s", warehouseLocation, database, table);
-  }
+  abstract String defaultWarehouseLocation(Configuration conf, String location);
 }

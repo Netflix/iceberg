@@ -16,19 +16,18 @@
 
 package com.netflix.iceberg.hadoop;
 
-import com.netflix.iceberg.BaseTable;
-import com.netflix.iceberg.PartitionSpec;
-import com.netflix.iceberg.Schema;
-import com.netflix.iceberg.Table;
-import com.netflix.iceberg.TableMetadata;
-import com.netflix.iceberg.TableOperations;
+import com.netflix.iceberg.*;
 import com.netflix.iceberg.exceptions.AlreadyExistsException;
 import com.netflix.iceberg.exceptions.NoSuchTableException;
+import org.apache.hadoop.conf.Configurable;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.fs.Path;
 
-public class HadoopTables {
-  private final Configuration conf;
+public class HadoopTables implements Tables, Configurable {
+  private Configuration conf;
+
+  public HadoopTables() {
+  }
 
   public HadoopTables(Configuration conf) {
     this.conf = conf;
@@ -57,5 +56,15 @@ public class HadoopTables {
 
   private TableOperations newTableOps(String location) {
     return new HadoopTableOperations(new Path(location), conf);
+  }
+
+  @Override
+  public void setConf(Configuration conf) {
+    this.conf = conf;
+  }
+
+  @Override
+  public Configuration getConf() {
+    return conf;
   }
 }
