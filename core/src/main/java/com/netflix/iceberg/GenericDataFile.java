@@ -24,10 +24,8 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
-import java.util.Collection;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 
 class GenericDataFile
     implements DataFile, IndexedRecord, SpecificData.SchemaConstructable, Serializable {
