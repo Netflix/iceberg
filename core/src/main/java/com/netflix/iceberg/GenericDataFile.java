@@ -24,8 +24,10 @@ import org.apache.avro.generic.IndexedRecord;
 import org.apache.avro.specific.SpecificData;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 class GenericDataFile
     implements DataFile, IndexedRecord, SpecificData.SchemaConstructable, Serializable {
@@ -54,11 +56,6 @@ class GenericDataFile
   private Map<Integer, Long> nullValueCounts = null;
   private Map<Integer, ByteBuffer> lowerBounds = null;
   private Map<Integer, ByteBuffer> upperBounds = null;
-
-  // TODO: add support for column min/max/hist
-  // private final Map<Integer, byte[]> mins;
-  // private final Map<Integer, byte[]> maxes;
-  // private final Map<Integer, byte[]> hists;
 
   // cached schema
   private transient org.apache.avro.Schema avroSchema = null;
@@ -106,6 +103,8 @@ class GenericDataFile
     this.columnSizes = null;
     this.valueCounts = null;
     this.nullValueCounts = null;
+    this.lowerBounds = null;
+    this.upperBounds = null;
     this.fromProjectionPos = null;
   }
 
@@ -123,6 +122,8 @@ class GenericDataFile
     this.columnSizes = null;
     this.valueCounts = null;
     this.nullValueCounts = null;
+    this.lowerBounds = null;
+    this.upperBounds = null;
     this.fromProjectionPos = null;
   }
 
@@ -149,6 +150,8 @@ class GenericDataFile
     this.columnSizes = metrics.columnSizes();
     this.valueCounts = metrics.valueCounts();
     this.nullValueCounts = metrics.nullValueCounts();
+    this.lowerBounds = SerializableByteBufferMap.wrap(metrics.lowerBounds());
+    this.upperBounds = SerializableByteBufferMap.wrap(metrics.upperBounds());
     this.fromProjectionPos = null;
   }
 
@@ -171,6 +174,8 @@ class GenericDataFile
     this.columnSizes = toCopy.columnSizes;
     this.valueCounts = toCopy.valueCounts;
     this.nullValueCounts = toCopy.nullValueCounts;
+    this.lowerBounds = toCopy.lowerBounds;
+    this.upperBounds = toCopy.upperBounds;
     this.fromProjectionPos = toCopy.fromProjectionPos;
   }
 
@@ -369,6 +374,5 @@ class GenericDataFile
         .add("upper_bounds", upperBounds)
         .toString();
   }
-
 
 }
