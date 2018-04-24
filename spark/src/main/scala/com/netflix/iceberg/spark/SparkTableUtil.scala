@@ -16,6 +16,8 @@
 
 package com.netflix.iceberg.spark
 
+import java.nio.ByteBuffer
+
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
 
@@ -94,7 +96,9 @@ object SparkTableUtil {
       rowCount: Long,
       columnSizes: Array[Long],
       valueCounts: Array[Long],
-      nullValueCounts: Array[Long]
+      nullValueCounts: Array[Long],
+      lowerBounds: Array[Array[Byte]],
+      upperBounds: Array[Array[Byte]]
     ) {
 
     /**
@@ -118,8 +122,27 @@ object SparkTableUtil {
           .withMetrics(new Metrics(rowCount,
             arrayToMap(columnSizes),
             arrayToMap(valueCounts),
-            arrayToMap(nullValueCounts)))
+            arrayToMap(nullValueCounts),
+            arrayToMap(lowerBounds),
+            arrayToMap(upperBounds)))
           .build()
+    }
+  }
+
+  private def bytesMapToArray(map: java.util.Map[Integer, ByteBuffer]): Array[Array[Byte]] = {
+    if (map != null) {
+      val keys = map.keySet.asScala
+      val max = keys.max
+      val arr = Array.fill(max + 1)(null.asInstanceOf[Array[Byte]])
+
+      keys.foreach { key =>
+        val buffer = map.get(key)
+        arr.update(key, buffer.array())
+      }
+
+      arr
+    } else {
+      null
     }
   }
 
@@ -139,10 +162,24 @@ object SparkTableUtil {
     }
   }
 
+  private def arrayToMap(arr: Array[Array[Byte]]): java.util.Map[Integer, ByteBuffer] = {
+    if (arr != null) {
+      val map: java.util.Map[Integer, ByteBuffer] = Maps.newHashMap()
+      arr.zipWithIndex.foreach {
+        case (null, _) => // skip
+        case (value, index) => map.put(index, ByteBuffer.wrap(value))
+      }
+      map
+    } else {
+      null
+    }
+  }
+
   private def arrayToMap(arr: Array[Long]): java.util.Map[Integer, java.lang.Long] = {
     if (arr != null) {
       val map: java.util.Map[Integer, java.lang.Long] = Maps.newHashMap()
       arr.zipWithIndex.foreach {
+        case (-1, _) => // skip default values
         case (value, index) => map.put(index, value)
       }
       map
@@ -172,6 +209,8 @@ object SparkTableUtil {
         -1,
         null,
         null,
+        null,
+        null,
         null)
     }
   }
@@ -194,7 +233,9 @@ object SparkTableUtil {
         metrics.recordCount,
         mapToArray(metrics.columnSizes),
         mapToArray(metrics.valueCounts),
-        mapToArray(metrics.nullValueCounts))
+        mapToArray(metrics.nullValueCounts),
+        bytesMapToArray(metrics.lowerBounds),
+        bytesMapToArray(metrics.upperBounds))
     }
   }
 }
