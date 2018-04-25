@@ -240,12 +240,12 @@ class GenericDataFile
 
   @Override
   public Map<Integer, ByteBuffer> lowerBounds() {
-    return null;
+    return lowerBounds;
   }
 
   @Override
   public Map<Integer, ByteBuffer> upperBounds() {
-    return null;
+    return upperBounds;
   }
 
   @Override
@@ -300,10 +300,10 @@ class GenericDataFile
         this.nullValueCounts = (Map<Integer, Long>) v;
         return;
       case 11:
-        this.lowerBounds = (Map<Integer, ByteBuffer>) v;
+        this.lowerBounds = SerializableByteBufferMap.wrap((Map<Integer, ByteBuffer>) v);
         return;
       case 12:
-        this.upperBounds= (Map<Integer, ByteBuffer>) v;
+        this.upperBounds= SerializableByteBufferMap.wrap((Map<Integer, ByteBuffer>) v);
         return;
       default:
         // ignore the object, it must be from a newer version of the format
@@ -312,7 +312,12 @@ class GenericDataFile
 
   @Override
   public Object get(int i) {
-    switch (i) {
+    int pos = i;
+    // if the schema was projected, map the incoming ordinal to the expected one
+    if (fromProjectionPos != null) {
+      pos = fromProjectionPos[i];
+    }
+    switch (pos) {
       case 0:
         return filePath;
       case 1:
