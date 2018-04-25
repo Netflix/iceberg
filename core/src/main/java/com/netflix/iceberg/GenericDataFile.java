@@ -345,7 +345,7 @@ class GenericDataFile
       case 12:
         return upperBounds;
       default:
-        throw new UnsupportedOperationException("Unknown field ordinal: " + i);
+        throw new UnsupportedOperationException("Unknown field ordinal: " + pos);
     }
   }
 
