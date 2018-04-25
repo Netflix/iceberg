@@ -24,6 +24,8 @@ import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.CharBuffer;
 import java.nio.charset.CharacterCodingException;
+import java.nio.charset.CharsetDecoder;
+import java.nio.charset.CharsetEncoder;
 import java.util.Arrays;
 import java.util.UUID;
 
@@ -64,6 +66,11 @@ public class Conversions {
     }
   }
 
+  private static final ThreadLocal<CharsetEncoder> ENCODER =
+      ThreadLocal.withInitial(Charsets.UTF_8::newEncoder);
+  private static final ThreadLocal<CharsetDecoder> DECODER =
+      ThreadLocal.withInitial(Charsets.UTF_8::newDecoder);
+
   public static ByteBuffer toByteBuffer(Type type, Object value) {
     switch (type.typeId()) {
       case BOOLEAN:
@@ -82,7 +89,7 @@ public class Conversions {
       case STRING:
         CharBuffer buffer = CharBuffer.wrap((CharSequence) value);
         try {
-          return Charsets.UTF_8.newEncoder().encode(buffer);
+          return ENCODER.get().encode(buffer);
         } catch (CharacterCodingException e) {
           throw new RuntimeIOException(e, "Failed to encode value as UTF-8: " + value);
         }
@@ -131,7 +138,11 @@ public class Conversions {
         }
         return tmp.getDouble();
       case STRING:
-        return tmp.asCharBuffer();
+        try {
+          return DECODER.get().decode(tmp);
+        } catch (CharacterCodingException e) {
+          throw new RuntimeIOException(e, "Failed to decode value as UTF-8: " + buffer);
+        }
       case UUID:
         long mostSigBits = tmp.getLong();
         long leastSigBits = tmp.getLong();

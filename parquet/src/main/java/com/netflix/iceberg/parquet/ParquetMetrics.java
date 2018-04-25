@@ -24,7 +24,7 @@ import com.netflix.iceberg.exceptions.RuntimeIOException;
 import com.netflix.iceberg.expressions.Literal;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.types.Conversions;
-import com.netflix.iceberg.types.Type;
+import com.netflix.iceberg.types.Types;
 import org.apache.parquet.column.statistics.Statistics;
 import org.apache.parquet.hadoop.ParquetFileReader;
 import org.apache.parquet.hadoop.metadata.BlockMetaData;
@@ -77,10 +77,15 @@ public class ParquetMetrics implements Serializable {
           missingStats.add(fieldId);
         } else if (!stats.isEmpty()) {
           increment(nullValueCounts, fieldId, stats.getNumNulls());
-          if (stats.hasNonNullValue()) {
-            Type fieldType = fileSchema.findType(fieldId);
-            updateMin(lowerBounds, fieldId, fromParquetPrimitive(fieldType, stats.genericGetMin()));
-            updateMax(upperBounds, fieldId, fromParquetPrimitive(fieldType, stats.genericGetMax()));
+
+          // only add min/max stats for top-level fields
+          // TODO: allow struct nesting, but not maps or arrays
+          Types.NestedField field = fileSchema.asStruct().field(fieldId);
+          if (field != null && stats.hasNonNullValue()) {
+            updateMin(lowerBounds, fieldId,
+                fromParquetPrimitive(field.type(), stats.genericGetMin()));
+            updateMax(upperBounds, fieldId,
+                fromParquetPrimitive(field.type(), stats.genericGetMax()));
           }
         }
       }
