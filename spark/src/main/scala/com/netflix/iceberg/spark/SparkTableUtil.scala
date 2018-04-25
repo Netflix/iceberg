@@ -17,6 +17,7 @@
 package com.netflix.iceberg.spark
 
 import java.nio.ByteBuffer
+import java.util
 
 import org.apache.hadoop.conf.Configuration
 import org.apache.hadoop.fs.Path
@@ -137,7 +138,24 @@ object SparkTableUtil {
 
       keys.foreach { key =>
         val buffer = map.get(key)
-        arr.update(key, buffer.array())
+
+        val copy = if (buffer.hasArray) {
+          val bytes = buffer.array()
+          if (buffer.arrayOffset() == 0 && buffer.position() == 0 &&
+              bytes.length == buffer.remaining()) {
+            bytes
+          } else {
+            val start = buffer.arrayOffset() + buffer.position()
+            val end = start + buffer.remaining()
+            util.Arrays.copyOfRange(bytes, start, end);
+          }
+        } else {
+          val bytes = Array.fill(buffer.remaining())(0.asInstanceOf[Byte])
+          buffer.get(bytes)
+          bytes
+        }
+
+        arr.update(key, copy)
       }
 
       arr
