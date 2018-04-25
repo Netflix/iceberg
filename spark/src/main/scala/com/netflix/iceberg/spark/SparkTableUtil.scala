@@ -97,8 +97,8 @@ object SparkTableUtil {
       columnSizes: Array[Long],
       valueCounts: Array[Long],
       nullValueCounts: Array[Long],
-      lowerBounds: Array[Array[Byte]],
-      upperBounds: Array[Array[Byte]]
+      lowerBounds: Seq[Array[Byte]],
+      upperBounds: Seq[Array[Byte]]
     ) {
 
     /**
@@ -129,7 +129,7 @@ object SparkTableUtil {
     }
   }
 
-  private def bytesMapToArray(map: java.util.Map[Integer, ByteBuffer]): Array[Array[Byte]] = {
+  private def bytesMapToArray(map: java.util.Map[Integer, ByteBuffer]): Seq[Array[Byte]] = {
     if (map != null) {
       val keys = map.keySet.asScala
       val max = keys.max
@@ -162,7 +162,7 @@ object SparkTableUtil {
     }
   }
 
-  private def arrayToMap(arr: Array[Array[Byte]]): java.util.Map[Integer, ByteBuffer] = {
+  private def arrayToMap(arr: Seq[Array[Byte]]): java.util.Map[Integer, ByteBuffer] = {
     if (arr != null) {
       val map: java.util.Map[Integer, ByteBuffer] = Maps.newHashMap()
       arr.zipWithIndex.foreach {
