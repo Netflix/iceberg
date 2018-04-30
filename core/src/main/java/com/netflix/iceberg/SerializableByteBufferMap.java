@@ -40,6 +40,10 @@ class SerializableByteBufferMap implements Map<Integer, ByteBuffer>, Serializabl
     return new SerializableByteBufferMap(map);
   }
 
+  public SerializableByteBufferMap() {
+    this.wrapped = Maps.newLinkedHashMap();
+  }
+
   private SerializableByteBufferMap(Map<Integer, ByteBuffer> wrapped) {
     this.wrapped = wrapped;
   }
