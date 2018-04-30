@@ -125,40 +125,47 @@ class RemoveSnapshots implements ExpireSnapshots {
       currentManifests.addAll(snapshot.manifests());
     }
 
-    List<String> manifestsToDelete = Lists.newArrayList();
-    List<CharSequence> filesToDelete = Lists.newArrayList();
+    Set<String> allManifests = Sets.newHashSet(currentManifests);
+    Set<String> manifestsToDelete = Sets.newHashSet();
     for (Snapshot snapshot : base.snapshots()) {
       long snapshotId = snapshot.snapshotId();
       if (!currentIds.contains(snapshotId)) {
-        // the snapshot was removed, so prepare deletes
-        Tasks.foreach(snapshot.manifests())
-            .noRetry().suppressFailureWhenFinished()
-            .onFailure((item, exc) ->
-              LOG.warn("Failed to get deleted files: this may cause orphaned data files", exc)
-            ).run(manifest -> {
-              if (!currentManifests.contains(manifest)) {
-                manifestsToDelete.add(manifest);
-              }
-
-              // even if the manifest is still used, it may contain files that can be deleted
-              try (ManifestReader reader = ManifestReader.read(ops.newInputFile(manifest))) {
-                for (ManifestEntry entry : reader.deletedFiles()) {
-                  if (snapshotId == entry.snapshotId()) {
-                    // if the snapshot ID matches a DELETE entry, it was deleted by the snapshot
-                    filesToDelete.add(entry.file().path());
-                  }
-                }
-              } catch (IOException e) {
-                throw new RuntimeIOException(e, "Failed to read manifest: " + manifest);
-              }
-            });
+        // the snapshot was removed, find any manifests that are no longer needed
+        for (String manifest : snapshot.manifests()) {
+          if (!currentManifests.contains(manifest)) {
+            manifestsToDelete.add(manifest);
+            allManifests.add(manifest);
+          }
+        }
       }
     }
+
+    Set<String> filesToDelete = Sets.newHashSet();
+    Tasks.foreach(allManifests)
+        .noRetry().suppressFailureWhenFinished()
+        .onFailure((item, exc) ->
+            LOG.warn("Failed to get deleted files: this may cause orphaned data files", exc)
+        ).run(manifest -> {
+          // even if the manifest is still used, it may contain files that can be deleted
+          // TODO: eliminate manifests with no deletes without scanning
+          try (ManifestReader reader = ManifestReader.read(ops.newInputFile(manifest))) {
+            for (ManifestEntry entry : reader.entries()) {
+              // if the snapshot ID of the DELETE entry is no longer valid, the data can be deleted
+              if (entry.status() == ManifestEntry.Status.DELETED &&
+                  !currentIds.contains(entry.snapshotId())) {
+                // use toString to ensure the path will not change (Utf8 is reused)
+                filesToDelete.add(entry.file().path().toString());
+              }
+            }
+          } catch (IOException e) {
+            throw new RuntimeIOException(e, "Failed to read manifest: " + manifest);
+          }
+    });
 
     Tasks.foreach(filesToDelete)
         .noRetry().suppressFailureWhenFinished()
         .onFailure((file, exc) -> LOG.warn("Delete failed for data file: " + file, exc))
-        .run(file -> deleteFunc.accept(file.toString()));
+        .run(file -> deleteFunc.accept(file));
 
     Tasks.foreach(manifestsToDelete)
         .noRetry().suppressFailureWhenFinished()
