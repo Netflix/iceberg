@@ -95,7 +95,7 @@ public class BaseTable implements Table {
 
   @Override
   public RewriteFiles newRewrite() {
-    throw new UnsupportedOperationException("File rewrites are not yet implemented.");
+    return new ReplaceFiles(ops);
   }
 
   @Override
@@ -112,7 +112,6 @@ public class BaseTable implements Table {
   public Rollback rollback() {
     return new RollbackToSnapshot(ops);
   }
-
 
   @Override
   public String toString() {

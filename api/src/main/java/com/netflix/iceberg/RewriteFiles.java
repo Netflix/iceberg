@@ -18,6 +18,8 @@ package com.netflix.iceberg;
 
 import com.netflix.iceberg.exceptions.CommitFailedException;
 
+import java.util.Set;
+
 /**
  * API for replacing files in a table.
  * <p>
@@ -30,4 +32,5 @@ import com.netflix.iceberg.exceptions.CommitFailedException;
  * will throw a {@link CommitFailedException}.
  */
 public interface RewriteFiles extends PendingUpdate<Snapshot> {
+    RewriteFiles replaceFiles(Set<DataFile> filesToDelete, Set<DataFile> filesToAdd);
 }
