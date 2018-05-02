@@ -102,6 +102,20 @@ public class GenericRecord implements Record, StructLike {
   }
 
   @Override
+  public String toString() {
+    StringBuilder sb = new StringBuilder();
+    sb.append("Record(");
+    for (int i = 0; i < values.length; i += 1) {
+      if (i != 0) {
+        sb.append(", ");
+      }
+      sb.append(values[i]);
+    }
+    sb.append(")");
+    return sb.toString();
+  }
+
+  @Override
   public boolean equals(Object other) {
     if (this == other) {
       return true;

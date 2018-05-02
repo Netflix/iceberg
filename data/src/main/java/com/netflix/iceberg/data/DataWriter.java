@@ -32,10 +32,14 @@ import java.util.List;
 
 import static com.netflix.iceberg.avro.AvroSchemaVisitor.visit;
 
-class DataWriter<T> implements DatumWriter<T> {
+public class DataWriter<T> implements DatumWriter<T> {
   private ValueWriter<T> writer = null;
 
-  public DataWriter(Schema schema) {
+  public static <D> DataWriter<D> create(Schema schema) {
+    return new DataWriter<>(schema);
+  }
+
+  private DataWriter(Schema schema) {
     setSchema(schema);
   }
 

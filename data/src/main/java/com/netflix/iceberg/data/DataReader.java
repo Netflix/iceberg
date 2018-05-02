@@ -40,12 +40,16 @@ class DataReader<T> implements DatumReader<T> {
   private static final ThreadLocal<Map<Schema, Map<Schema, ResolvingDecoder>>> DECODER_CACHES =
       ThreadLocal.withInitial(() -> new MapMaker().weakKeys().makeMap());
 
+  public static <D> DataReader<D> create(Schema readSchema) {
+    return new DataReader<>(readSchema);
+  }
+
   private final Schema readSchema;
   private final ValueReader<T> reader;
   private Schema fileSchema = null;
 
   @SuppressWarnings("unchecked")
-  public DataReader(Schema readSchema) {
+  private DataReader(Schema readSchema) {
     this.readSchema = readSchema;
     this.reader = (ValueReader<T>) AvroSchemaVisitor.visit(readSchema, new ReadBuilder());
   }

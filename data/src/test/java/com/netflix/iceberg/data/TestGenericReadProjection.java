@@ -32,14 +32,14 @@ public class TestGenericReadProjection extends TestReadProjection {
 
     try (FileAppender<Record> appender = Avro.write(Files.localOutput(file))
         .schema(writeSchema)
-        .createWriterFunc(DataWriter::new)
+        .createWriterFunc(DataWriter::create)
         .build()) {
       appender.add(record);
     }
 
     Iterable<Record> records = Avro.read(Files.localInput(file))
         .project(readSchema)
-        .createReaderFunc(DataReader::new)
+        .createReaderFunc(DataReader::create)
         .build();
 
     return Iterables.getOnlyElement(records);
