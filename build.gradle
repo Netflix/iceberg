@@ -108,6 +108,13 @@ project(':iceberg-core') {
   }
 }
 
+project(':iceberg-data') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-core')
+  }
+}
+
 project(':iceberg-orc') {
   dependencies {
     compile project(':iceberg-api')
