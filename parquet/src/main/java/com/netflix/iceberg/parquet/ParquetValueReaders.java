@@ -57,7 +57,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> columns() {
+    public List<TripleIterator<?>> children() {
       return children;
     }
   }
@@ -108,7 +108,7 @@ public class ParquetValueReaders {
       this.definitionLevel = definitionLevel;
       this.reader = reader;
       this.column = reader.column();
-      this.children = reader.columns();
+      this.children = reader.children();
     }
 
     @Override
@@ -135,7 +135,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> columns() {
+    public List<TripleIterator<?>> children() {
       return children;
     }
   }
@@ -152,7 +152,7 @@ public class ParquetValueReaders {
       this.repetitionLevel = repetitionLevel;
       this.reader = reader;
       this.column = reader.column();
-      this.children = reader.columns();
+      this.children = reader.children();
     }
 
     @Override
@@ -187,7 +187,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> columns() {
+    public List<TripleIterator<?>> children() {
       return children;
     }
 
@@ -216,8 +216,8 @@ public class ParquetValueReaders {
       this.valueReader = valueReader;
       this.column = keyReader.column();
       this.children = ImmutableList.<TripleIterator<?>>builder()
-          .addAll(keyReader.columns())
-          .addAll(valueReader.columns())
+          .addAll(keyReader.children())
+          .addAll(valueReader.children())
           .build();
     }
 
@@ -255,7 +255,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> columns() {
+    public List<TripleIterator<?>> children() {
       return children;
     }
 
@@ -322,7 +322,7 @@ public class ParquetValueReaders {
         this.readers[i] = readers.get(i);
         this.columns[i] = reader.column();
         this.setters[i] = newSetter(reader, type.getType(i));
-        columnsBuilder.addAll(reader.columns());
+        columnsBuilder.addAll(reader.children());
       }
 
       this.children = columnsBuilder.build();
@@ -351,7 +351,7 @@ public class ParquetValueReaders {
           //setters[i].set(intermediate, i);
         } else {
           setNull(intermediate, i);
-          for (TripleIterator<?> column : readers[i].columns()) {
+          for (TripleIterator<?> column : readers[i].children()) {
             column.nextNull();
           }
         }
@@ -361,7 +361,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> columns() {
+    public List<TripleIterator<?>> children() {
       return children;
     }
 
