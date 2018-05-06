@@ -16,11 +16,13 @@
 
 package com.netflix.iceberg.parquet;
 
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.netflix.iceberg.avro.AvroSchemaUtil;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedKeyValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.ReusableEntry;
 import com.netflix.iceberg.parquet.ParquetValueReaders.StructReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.UnboxedReader;
 import com.netflix.iceberg.types.Types;
@@ -29,6 +31,7 @@ import org.apache.avro.generic.GenericData.Fixed;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.avro.util.Utf8;
 import org.apache.parquet.column.ColumnDescriptor;
+import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
@@ -242,7 +245,7 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public BigDecimal read() {
+    public BigDecimal read(BigDecimal ignored) {
       return new BigDecimal(new BigInteger(column.nextBinary().getBytesUnsafe()), scale);
     }
   }
@@ -253,7 +256,7 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public String read() {
+    public String read(String ignored) {
       return column.nextBinary().toStringUsingUTF8();
     }
   }
@@ -264,8 +267,24 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public Utf8 read() {
-      return new Utf8(column.nextBinary().getBytes());
+    public Utf8 read(Utf8 reuse) {
+      Utf8 utf8;
+      if (reuse != null) {
+        utf8 = reuse;
+      } else {
+        utf8 = new Utf8();
+      }
+
+      // use a byte buffer because it never results in a copy
+      ByteBuffer buffer = column.nextBinary().toByteBuffer();
+
+      // always copy the bytes into the Utf8. for constant binary data backed by an array starting
+      // at 0, it is possible to wrap the bytes in a Utf8, but reusing that Utf8 could corrupt the
+      // constant binary if its backing buffer is copied to.
+      utf8.setByteLength(buffer.remaining());
+      buffer.get(utf8.getBytes(), 0, buffer.remaining());
+
+      return utf8;
     }
   }
 
@@ -275,7 +294,7 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public UUID read() {
+    public UUID read(UUID ignored) {
       ByteBuffer buffer = column.nextBinary().toByteBuffer();
       buffer.order(ByteOrder.BIG_ENDIAN);
 
@@ -295,9 +314,16 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public Fixed read() {
-      Fixed fixed = new Fixed(schema);
-      fixed.bytes(column.nextBinary().getBytes());
+    public Fixed read(Fixed reuse) {
+      Fixed fixed;
+      if (reuse != null) {
+        fixed = reuse;
+      } else {
+        fixed = new Fixed(schema);
+      }
+
+      column.nextBinary().toByteBuffer().get(fixed.bytes());
+
       return fixed;
     }
   }
@@ -308,20 +334,59 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public ByteBuffer read() {
-      return column.nextBinary().toByteBuffer();
+    public ByteBuffer read(ByteBuffer reuse) {
+      Binary binary = column.nextBinary();
+      ByteBuffer data = binary.toByteBuffer();
+      if (reuse != null && reuse.hasArray() && reuse.capacity() >= data.remaining()) {
+        data.get(reuse.array(), reuse.arrayOffset(), data.remaining());
+        reuse.position(0);
+        reuse.limit(data.remaining());
+        return reuse;
+      } else {
+        byte[] array = new byte[data.remaining()];
+        data.get(array, 0, data.remaining());
+        return ByteBuffer.wrap(array);
+      }
     }
   }
 
   static class ListReader<E> extends RepeatedReader<List<E>, List<E>, E> {
+    private List<E> lastList = null;
+    private Iterator<E> elements = null;
+
     ListReader(int definitionLevel, int repetitionLevel,
                       ParquetValueReader<E> reader) {
       super(definitionLevel, repetitionLevel, reader);
     }
 
     @Override
-    protected List<E> newListData() {
-      return Lists.newArrayList();
+    protected List<E> newListData(List<E> reuse) {
+      List<E> list;
+      if (lastList != null) {
+        lastList.clear();
+        list = lastList;
+      } else {
+        list = Lists.newArrayList();
+      }
+
+      if (reuse != null) {
+        this.lastList = reuse;
+        this.elements = reuse.iterator();
+      } else {
+        this.lastList = null;
+        this.elements = Iterators.emptyIterator();
+      }
+
+      return list;
+    }
+
+    @Override
+    protected E getElement(List<E> reuse) {
+      if (elements.hasNext()) {
+        return elements.next();
+      }
+
+      return null;
     }
 
     @Override
@@ -336,6 +401,10 @@ public class ParquetAvroValueReaders {
   }
 
   static class MapReader<K, V> extends RepeatedKeyValueReader<Map<K, V>, Map<K, V>, K, V> {
+    private final ReusableEntry<K, V> nullEntry = new ReusableEntry<>();
+    private Map<K, V> lastMap = null;
+    private Iterator<Map.Entry<K, V>> pairs = null;
+
     MapReader(int definitionLevel, int repetitionLevel,
                         ParquetValueReader<K> keyReader,
                         ParquetValueReader<V> valueReader) {
@@ -343,8 +412,33 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    protected Map<K, V> newMapData() {
-      return Maps.newLinkedHashMap();
+    protected Map<K, V> newMapData(Map<K, V> reuse) {
+      Map<K, V> map;
+      if (lastMap != null) {
+        lastMap.clear();
+        map = lastMap;
+      } else {
+        map = Maps.newLinkedHashMap();
+      }
+
+      if (reuse != null) {
+        this.lastMap = reuse;
+        this.pairs = reuse.entrySet().iterator();
+      } else {
+        this.lastMap = null;
+        this.pairs = Iterators.emptyIterator();
+      }
+
+      return map;
+    }
+
+    @Override
+    protected Map.Entry<K, V> getPair(Map<K, V> map) {
+      if (pairs.hasNext()) {
+        return pairs.next();
+      } else {
+        return nullEntry;
+      }
     }
 
     @Override
@@ -369,8 +463,18 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    protected Record newStructData(GroupType type) {
-      return new Record(schema);
+    protected Record newStructData(GroupType type, Record reuse) {
+      if (reuse != null) {
+        return reuse;
+      } else {
+        return new Record(schema);
+      }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    protected Object getField(Record intermediate, int pos) {
+      return intermediate.get(pos);
     }
 
     @Override

@@ -58,6 +58,7 @@ public class ParquetReader<T> implements Iterable<T>, Closeable {
 
     private long nextRowGroupStart = 0;
     private long valuesRead = 0;
+    private T last = null;
 
     public FileIterator(ParquetFileReader reader, ParquetValueReader<T> model) {
       this.reader = reader;
@@ -77,8 +78,10 @@ public class ParquetReader<T> implements Iterable<T>, Closeable {
         advance();
       }
 
+      this.last = model.read(last);
       valuesRead += 1;
-      return model.read();
+
+      return last;
     }
 
     private void advance() {

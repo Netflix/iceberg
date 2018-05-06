@@ -16,6 +16,7 @@
 
 package com.netflix.iceberg.spark.data;
 
+import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.parquet.ParquetTypeVisitor;
@@ -23,6 +24,7 @@ import com.netflix.iceberg.parquet.ParquetValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.PrimitiveReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedKeyValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.ReusableEntry;
 import com.netflix.iceberg.parquet.ParquetValueReaders.StructReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.UnboxedReader;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -47,6 +49,7 @@ import java.math.BigInteger;
 import java.nio.ByteBuffer;
 import java.util.Iterator;
 import java.util.List;
+import java.util.Map;
 
 import static com.netflix.iceberg.parquet.ParquetSchemaUtil.convert;
 import static com.netflix.iceberg.parquet.ParquetValueReaders.option;
@@ -149,9 +152,9 @@ public class SparkParquetReader {
               case FIXED_LEN_BYTE_ARRAY:
                 return new BinaryDecimalReader(desc, decimal.getScale());
               case INT64:
-                return new LongDecimalReader(desc, decimal.getScale());
+                return new LongDecimalReader(desc, decimal.getPrecision(), decimal.getScale());
               case INT32:
-                return new IntegerDecimalReader(desc, decimal.getScale());
+                return new IntegerDecimalReader(desc, decimal.getPrecision(), decimal.getScale());
               default:
                 throw new UnsupportedOperationException(
                     "Unsupported base type for decimal: " + primitive.getPrimitiveTypeName());
@@ -215,37 +218,41 @@ public class SparkParquetReader {
     }
 
     @Override
-    public Decimal read() {
+    public Decimal read(Decimal ignored) {
       Binary binary = column.nextBinary();
       return Decimal.fromDecimal(new BigDecimal(new BigInteger(binary.getBytes()), scale));
     }
   }
 
   private static class IntegerDecimalReader extends PrimitiveReader<Decimal> {
+    private final int precision;
     private final int scale;
 
-    IntegerDecimalReader(ColumnDescriptor desc, int scale) {
+    IntegerDecimalReader(ColumnDescriptor desc, int precision, int scale) {
       super(desc);
+      this.precision = precision;
       this.scale = scale;
     }
 
     @Override
-    public Decimal read() {
-      return Decimal.fromDecimal(new BigDecimal(BigInteger.valueOf(column.nextInteger()), scale));
+    public Decimal read(Decimal ignored) {
+      return Decimal.apply(column.nextInteger(), precision, scale);
     }
   }
 
   private static class LongDecimalReader extends PrimitiveReader<Decimal> {
+    private final int precision;
     private final int scale;
 
-    LongDecimalReader(ColumnDescriptor desc, int scale) {
+    LongDecimalReader(ColumnDescriptor desc, int precision, int scale) {
       super(desc);
+      this.precision = precision;
       this.scale = scale;
     }
 
     @Override
-    public Decimal read() {
-      return Decimal.fromDecimal(new BigDecimal(BigInteger.valueOf(column.nextLong()), scale));
+    public Decimal read(Decimal ignored) {
+      return Decimal.apply(column.nextInteger(), precision, scale);
     }
   }
 
@@ -266,7 +273,7 @@ public class SparkParquetReader {
     }
 
     @Override
-    public UTF8String read() {
+    public UTF8String read(UTF8String ignored) {
       Binary binary = column.nextBinary();
       ByteBuffer buffer = binary.toByteBuffer();
       if (buffer.hasArray()) {
@@ -284,26 +291,45 @@ public class SparkParquetReader {
     }
 
     @Override
-    public byte[] read() {
+    public byte[] read(byte[] ignored) {
       return column.nextBinary().getBytes();
     }
   }
 
-  private static class ArrayReader<T> extends RepeatedReader<ArrayData, Void, T> {
-    private final List<T> reusedList = Lists.newArrayList();
+  private static class ArrayReader<E> extends RepeatedReader<ArrayData, Void, E> {
+    private final List<E> reusedList = Lists.newArrayList();
+    private Iterator<E> elements = null;
 
-    ArrayReader(int definitionLevel, int repetitionLevel, ParquetValueReader<T> reader) {
+    ArrayReader(int definitionLevel, int repetitionLevel, ParquetValueReader<E> reader) {
       super(definitionLevel, repetitionLevel, reader);
+      // TODO: create a new GenericArrayData implementation that can be reused
     }
 
     @Override
-    protected Void newListData() {
+    @SuppressWarnings("unchecked")
+    protected Void newListData(ArrayData reuse) {
       reusedList.clear();
+
+      if (reuse instanceof GenericArrayData) {
+        this.elements = Iterators.forArray((E[]) reuse.array());
+      } else {
+        this.elements = Iterators.emptyIterator();
+      }
+
       return null;
     }
 
     @Override
-    protected void addElement(Void list, T element) {
+    protected E getElement(Void list) {
+      if (elements.hasNext()) {
+        return elements.next();
+      }
+
+      return null;
+    }
+
+    @Override
+    protected void addElement(Void ignored, E element) {
       reusedList.add(element);
     }
 
@@ -316,15 +342,40 @@ public class SparkParquetReader {
   private static class MapReader<K, V> extends RepeatedKeyValueReader<MapData, Void, K, V> {
     private final List<Object> reusedKeyList = Lists.newArrayList();
     private final List<Object> reusedValueList = Lists.newArrayList();
+    private final ReusableEntry<K, V> entry = new ReusableEntry<>();
+    private final ReusableEntry<K, V> nullEntry = new ReusableEntry<>();
+
+    private Iterator<K> keys = null;
+    private Iterator<V> values = null;
 
     MapReader(int definitionLevel, int repetitionLevel,
               ParquetValueReader<K> keyReader, ParquetValueReader<V> valueReader) {
       super(definitionLevel, repetitionLevel, keyReader, valueReader);
+      nullEntry.set(null, null);
     }
 
     @Override
-    protected Void newMapData() {
+    @SuppressWarnings("unchecked")
+    protected Void newMapData(MapData reuse) {
+      if (reuse instanceof ArrayBasedMapData) {
+        this.keys = Iterators.forArray((K[]) reuse.keyArray().array());
+        this.values = Iterators.forArray((V[]) reuse.valueArray().array());
+      } else {
+        this.keys = Iterators.emptyIterator();
+        this.values = Iterators.emptyIterator();
+      }
+
       return null;
+    }
+
+    @Override
+    protected Map.Entry<K, V> getPair(Void map) {
+      if (keys.hasNext()) {
+        entry.set(keys.next(), values.next());
+        return entry;
+      } else {
+        return nullEntry;
+      }
     }
 
     @Override
@@ -341,56 +392,65 @@ public class SparkParquetReader {
     }
   }
 
-  private static class InternalRowReader extends StructReader<InternalRow, InternalRow> {
-    private final GenericInternalRow reusedRow;
+  private static class InternalRowReader extends StructReader<InternalRow, GenericInternalRow> {
+    private final int numFields;
 
     InternalRowReader(GroupType type, int definitionLevel, List<ParquetValueReader<?>> readers) {
       super(type, definitionLevel, readers);
-      this.reusedRow = new GenericInternalRow(readers.size());
+      this.numFields = readers.size();
     }
 
     @Override
-    protected InternalRow newStructData(GroupType type) {
-      return reusedRow;
+    protected GenericInternalRow newStructData(GroupType type, InternalRow reuse) {
+      if (reuse != null && reuse instanceof GenericInternalRow) {
+        return (GenericInternalRow) reuse;
+      } else {
+        return new GenericInternalRow(numFields);
+      }
     }
 
     @Override
-    protected InternalRow buildStruct(InternalRow struct) {
+    protected Object getField(GenericInternalRow intermediate, int pos) {
+      return intermediate.genericGet(pos);
+    }
+
+    @Override
+    protected InternalRow buildStruct(GenericInternalRow struct) {
       return struct;
     }
 
     @Override
-    protected void set(InternalRow row, int pos, Object value) {
+    protected void set(GenericInternalRow row, int pos, Object value) {
       row.update(pos, value);
     }
 
     @Override
-    protected void setNull(InternalRow row, int pos) {
+    protected void setNull(GenericInternalRow row, int pos) {
       row.setNullAt(pos);
     }
 
     @Override
-    protected void setBoolean(InternalRow row, int pos, boolean value) {
+    protected void setBoolean(GenericInternalRow row, int pos, boolean value) {
       row.setBoolean(pos, value);
     }
 
     @Override
-    protected void setInteger(InternalRow row, int pos, int value) {
+    protected void setInteger(GenericInternalRow row, int pos, int value) {
       row.setInt(pos, value);
     }
 
     @Override
-    protected void setLong(InternalRow row, int pos, long value) {
+    protected void setLong(GenericInternalRow row, int pos, long value) {
       row.setLong(pos, value);
     }
 
     @Override
-    protected void setFloat(InternalRow row, int pos, float value) {
+    protected void setFloat(GenericInternalRow row, int pos, float value) {
       row.setFloat(pos, value);
     }
 
     @Override
-    protected void setDouble(InternalRow row, int pos, double value) {
+    protected void setDouble(GenericInternalRow row, int pos, double value) {
       row.setDouble(pos, value);
     }
   }

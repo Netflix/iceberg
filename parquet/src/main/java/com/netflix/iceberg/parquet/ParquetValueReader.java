@@ -20,7 +20,7 @@ import org.apache.parquet.column.page.PageReadStore;
 import java.util.List;
 
 public interface ParquetValueReader<T> {
-  T read();
+  T read(T reuse);
 
   TripleIterator<?> column();
 

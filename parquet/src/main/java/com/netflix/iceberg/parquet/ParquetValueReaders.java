@@ -24,6 +24,7 @@ import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.Type;
 import java.lang.reflect.Array;
 import java.util.List;
+import java.util.Map;
 
 public class ParquetValueReaders {
   public static <T> ParquetValueReader<T> option(Type type, int definitionLevel,
@@ -68,7 +69,7 @@ public class ParquetValueReaders {
 
     @Override
     @SuppressWarnings("unchecked")
-    public T read() {
+    public T read(T ignored) {
       return (T) column.next();
     }
 
@@ -121,9 +122,9 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public T read() {
+    public T read(T reuse) {
       if (column.currentDefinitionLevel() > definitionLevel) {
-        return reader.read();
+        return reader.read(reuse);
       }
 
       for (TripleIterator<?> column : children) {
@@ -165,12 +166,12 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public T read() {
-      I intermediate = newListData();
+    public T read(T reuse) {
+      I intermediate = newListData(reuse);
 
       do {
         if (column.currentDefinitionLevel() > definitionLevel) {
-          addElement(intermediate, reader.read());
+          addElement(intermediate, reader.read(getElement(intermediate)));
         } else {
           // consume the empty list triple
           for (TripleIterator<?> column : children) {
@@ -190,7 +191,9 @@ public class ParquetValueReaders {
       return children;
     }
 
-    protected abstract I newListData();
+    protected abstract I newListData(T reuse);
+
+    protected abstract E getElement(I list);
 
     protected abstract void addElement(I list, E element);
 
@@ -230,12 +233,13 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public M read() {
-      I intermediate = newMapData();
+    public M read(M reuse) {
+      I intermediate = newMapData(reuse);
 
       do {
         if (column.currentDefinitionLevel() > definitionLevel) {
-          addPair(intermediate, keyReader.read(), valueReader.read());
+          Map.Entry<K, V> pair = getPair(intermediate);
+          addPair(intermediate, keyReader.read(pair.getKey()), valueReader.read(pair.getValue()));
         } else {
           // consume the empty map triple
           for (TripleIterator<?> column : children) {
@@ -255,16 +259,45 @@ public class ParquetValueReaders {
       return children;
     }
 
-    protected abstract I newMapData();
+    protected abstract I newMapData(M reuse);
+
+    protected abstract Map.Entry<K, V> getPair(I map);
 
     protected abstract void addPair(I map, K key, V value);
 
     protected abstract M buildMap(I map);
   }
 
+  public static class ReusableEntry<K, V> implements Map.Entry<K, V> {
+    private K key = null;
+    private V value = null;
+
+    public void set(K key, V value) {
+      this.key = key;
+      this.value = value;
+    }
+
+    @Override
+    public K getKey() {
+      return key;
+    }
+
+    @Override
+    public V getValue() {
+      return value;
+    }
+
+    @Override
+    public V setValue(V value) {
+      V lastValue = this.value;
+      this.value = value;
+      return lastValue;
+    }
+  }
+
   public abstract static class StructReader<T, I> implements ParquetValueReader<T> {
     private interface Setter<R> {
-      void set(R record, int pos);
+      void set(R record, int pos, Object reuse);
     }
 
     private final GroupType type;
@@ -308,13 +341,13 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public final T read() {
-      I intermediate = newStructData(type);
+    public final T read(T reuse) {
+      I intermediate = newStructData(type, reuse);
 
       for (int i = 0; i < readers.length; i += 1) {
         if (!type.getType(i).isRepetition(Type.Repetition.OPTIONAL) ||
             columns[i].currentDefinitionLevel() > definitionLevel) {
-          set(intermediate, i, readers[i].read());
+          set(intermediate, i, readers[i].read(get(intermediate, i)));
           //setters[i].set(intermediate, i);
         } else {
           setNull(intermediate, i);
@@ -332,32 +365,40 @@ public class ParquetValueReaders {
       return children;
     }
 
-    private Setter<I> newSetter(ParquetValueReader<?> reader, Type type) {
+    @SuppressWarnings("unchecked")
+    private <E> Setter<I> newSetter(ParquetValueReader<E> reader, Type type) {
       if (reader instanceof UnboxedReader && type.isPrimitive()) {
         UnboxedReader<?> unboxed  = (UnboxedReader<?>) reader;
         switch (type.asPrimitiveType().getPrimitiveTypeName()) {
           case BOOLEAN:
-            return (record, pos) -> setBoolean(record, pos, unboxed.readBoolean());
+            return (record, pos, ignored) -> setBoolean(record, pos, unboxed.readBoolean());
           case INT32:
-            return (record, pos) -> setInteger(record, pos, unboxed.readInteger());
+            return (record, pos, ignored) -> setInteger(record, pos, unboxed.readInteger());
           case INT64:
-            return (record, pos) -> setLong(record, pos, unboxed.readLong());
+            return (record, pos, ignored) -> setLong(record, pos, unboxed.readLong());
           case FLOAT:
-            return (record, pos) -> setFloat(record, pos, unboxed.readFloat());
+            return (record, pos, ignored) -> setFloat(record, pos, unboxed.readFloat());
           case DOUBLE:
-            return (record, pos) -> setDouble(record, pos, unboxed.readDouble());
+            return (record, pos, ignored) -> setDouble(record, pos, unboxed.readDouble());
           case FIXED_LEN_BYTE_ARRAY:
           case BINARY:
-            return (record, pos) -> set(record, pos, unboxed.readBinary());
+            return (record, pos, ignored) -> set(record, pos, unboxed.readBinary());
           default:
             throw new UnsupportedOperationException("Unsupported type: " + type);
         }
       }
 
-      return (record, pos) -> set(record, pos, reader.read());
+      return (record, pos, reuse) -> set(record, pos, reader.read((E) reuse));
     }
 
-    protected abstract I newStructData(GroupType type);
+    @SuppressWarnings("unchecked")
+    private <E> E get(I intermediate, int pos) {
+      return (E) getField(intermediate, pos);
+    }
+
+    protected abstract I newStructData(GroupType type, T reuse);
+
+    protected abstract Object getField(I intermediate, int pos);
 
     protected abstract T buildStruct(I struct);
 
@@ -366,7 +407,7 @@ public class ParquetValueReaders {
      * <p>
      * To avoid boxing, override {@link #setInteger(Object, int, int)} and similar methods.
      *
-     * @param struct a struct object created by {@link #newStructData(GroupType)}
+     * @param struct a struct object created by {@link #newStructData(GroupType, Object)}
      * @param pos the position in the struct to set
      * @param value the value to set
      */

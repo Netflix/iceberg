@@ -28,6 +28,7 @@ import com.netflix.iceberg.types.Types;
 import org.apache.avro.generic.GenericData.Record;
 import org.apache.parquet.schema.MessageType;
 import org.junit.Assert;
+import org.junit.Ignore;
 import org.junit.Rule;
 import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
@@ -68,7 +69,7 @@ public class TestParquetAvroReader {
       optional(2, "slide", Types.StringType.get())
   );
 
-  @Test
+  @Ignore
   public void testStructSchema() throws IOException {
     Schema structSchema = new Schema(
         required(1, "circumvent", Types.LongType.get()),
@@ -125,7 +126,7 @@ public class TestParquetAvroReader {
         "Ran %d trials: mean time: %.3f ms, stddev: %.3f ms", n, mean, stddev));
   }
 
-  @Test
+  @Ignore
   public void testWithOldReadPath() throws IOException {
     File testFile = writeTestData(COMPLEX_SCHEMA, 500_000, 1985);
     MessageType readSchema = ParquetSchemaUtil.convert(COMPLEX_SCHEMA, "test");
