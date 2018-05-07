@@ -16,9 +16,6 @@
 
 package com.netflix.iceberg.spark.data;
 
-import com.google.common.collect.Iterators;
-import com.google.common.collect.Lists;
-import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.parquet.ParquetTypeVisitor;
 import com.netflix.iceberg.parquet.ParquetValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.PrimitiveReader;
@@ -36,48 +33,38 @@ import org.apache.parquet.schema.PrimitiveType;
 import org.apache.parquet.schema.Type;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
-import org.apache.spark.sql.catalyst.expressions.codegen.UnsafeRowWriter;
 import org.apache.spark.sql.catalyst.util.ArrayBasedMapData;
 import org.apache.spark.sql.catalyst.util.ArrayData;
 import org.apache.spark.sql.catalyst.util.GenericArrayData;
 import org.apache.spark.sql.catalyst.util.MapData;
+import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Decimal;
+import org.apache.spark.unsafe.types.CalendarInterval;
 import org.apache.spark.unsafe.types.UTF8String;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
+import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 
-import static com.netflix.iceberg.parquet.ParquetSchemaUtil.convert;
 import static com.netflix.iceberg.parquet.ParquetValueReaders.option;
 
-public class SparkParquetReader {
-  private final ParquetValueReader reader;
-  private final UnsafeRowWriter rowWriter;
-
-  public SparkParquetReader(Schema readSchema, MessageType fileSchema) {
-    // use the read schema to build the reader so that field order is correct.
-    // TODO: this will break if required fields in the file are optional in the read schema
-    this.reader = buildReader(convert(readSchema, fileSchema.getName()), readSchema);
-    this.rowWriter = null; // new UnsafeRowWriter();
+public class SparkParquetReaders {
+  private SparkParquetReaders() {
   }
 
   @SuppressWarnings("unchecked")
-  private static ParquetValueReader<UnsafeRow> buildReader(MessageType type, Schema schema) {
-    return (ParquetValueReader<UnsafeRow>) ParquetTypeVisitor
-        .visit(type, new ReadBuilder(type, schema));
+  public static ParquetValueReader<InternalRow> buildReader(MessageType type) {
+    return (ParquetValueReader<InternalRow>) ParquetTypeVisitor.visit(type, new ReadBuilder(type));
   }
 
   private static class ReadBuilder extends ParquetTypeVisitor<ParquetValueReader<?>> {
     private final MessageType type;
-    private final Schema schema;
 
-    ReadBuilder(MessageType type, Schema schema) {
+    ReadBuilder(MessageType type) {
       this.type = type;
-      this.schema = schema;
     }
 
     @Override
@@ -252,7 +239,7 @@ public class SparkParquetReader {
 
     @Override
     public Decimal read(Decimal ignored) {
-      return Decimal.apply(column.nextInteger(), precision, scale);
+      return Decimal.apply(column.nextLong(), precision, scale);
     }
   }
 
@@ -296,99 +283,113 @@ public class SparkParquetReader {
     }
   }
 
-  private static class ArrayReader<E> extends RepeatedReader<ArrayData, Void, E> {
-    private final List<E> reusedList = Lists.newArrayList();
-    private Iterator<E> elements = null;
+  private static class ArrayReader<E> extends RepeatedReader<ArrayData, ReusableArrayData, E> {
+    private int readPos = 0;
+    private int writePos = 0;
 
     ArrayReader(int definitionLevel, int repetitionLevel, ParquetValueReader<E> reader) {
       super(definitionLevel, repetitionLevel, reader);
-      // TODO: create a new GenericArrayData implementation that can be reused
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    protected Void newListData(ArrayData reuse) {
-      reusedList.clear();
+    protected ReusableArrayData newListData(ArrayData reuse) {
+      this.readPos = 0;
+      this.writePos = 0;
 
-      if (reuse instanceof GenericArrayData) {
-        this.elements = Iterators.forArray((E[]) reuse.array());
+      if (reuse instanceof ReusableArrayData) {
+        return (ReusableArrayData) reuse;
       } else {
-        this.elements = Iterators.emptyIterator();
+        return new ReusableArrayData();
+      }
+    }
+
+    @Override
+    @SuppressWarnings("unchecked")
+    protected E getElement(ReusableArrayData list) {
+      E value = null;
+      if (readPos < list.capacity()) {
+        value = (E) list.values[readPos];
       }
 
-      return null;
+      readPos += 1;
+
+      return value;
     }
 
     @Override
-    protected E getElement(Void list) {
-      if (elements.hasNext()) {
-        return elements.next();
+    protected void addElement(ReusableArrayData reused, E element) {
+      if (writePos >= reused.capacity()) {
+        reused.grow();
       }
 
-      return null;
+      reused.values[writePos] = element;
+
+      writePos += 1;
     }
 
     @Override
-    protected void addElement(Void ignored, E element) {
-      reusedList.add(element);
-    }
-
-    @Override
-    protected ArrayData buildList(Void list) {
-      return new GenericArrayData(reusedList.toArray());
+    protected ArrayData buildList(ReusableArrayData list) {
+      list.setNumElements(writePos);
+      return list;
     }
   }
 
-  private static class MapReader<K, V> extends RepeatedKeyValueReader<MapData, Void, K, V> {
-    private final List<Object> reusedKeyList = Lists.newArrayList();
-    private final List<Object> reusedValueList = Lists.newArrayList();
+  private static class MapReader<K, V> extends RepeatedKeyValueReader<MapData, ReusableMapData, K, V> {
+    private int readPos = 0;
+    private int writePos = 0;
+
     private final ReusableEntry<K, V> entry = new ReusableEntry<>();
     private final ReusableEntry<K, V> nullEntry = new ReusableEntry<>();
-
-    private Iterator<K> keys = null;
-    private Iterator<V> values = null;
 
     MapReader(int definitionLevel, int repetitionLevel,
               ParquetValueReader<K> keyReader, ParquetValueReader<V> valueReader) {
       super(definitionLevel, repetitionLevel, keyReader, valueReader);
-      nullEntry.set(null, null);
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    protected Void newMapData(MapData reuse) {
-      if (reuse instanceof ArrayBasedMapData) {
-        this.keys = Iterators.forArray((K[]) reuse.keyArray().array());
-        this.values = Iterators.forArray((V[]) reuse.valueArray().array());
-      } else {
-        this.keys = Iterators.emptyIterator();
-        this.values = Iterators.emptyIterator();
-      }
+    protected ReusableMapData newMapData(MapData reuse) {
+      this.readPos = 0;
+      this.writePos = 0;
 
-      return null;
-    }
-
-    @Override
-    protected Map.Entry<K, V> getPair(Void map) {
-      if (keys.hasNext()) {
-        entry.set(keys.next(), values.next());
-        return entry;
+      if (reuse instanceof ReusableMapData) {
+        return (ReusableMapData) reuse;
       } else {
-        return nullEntry;
+        return new ReusableMapData();
       }
     }
 
     @Override
-    protected void addPair(Void map, K key, V value) {
-      reusedKeyList.add(key);
-      reusedValueList.add(value);
+    @SuppressWarnings("unchecked")
+    protected Map.Entry<K, V> getPair(ReusableMapData map) {
+      Map.Entry<K, V> kv = nullEntry;
+      if (readPos < map.capacity()) {
+        entry.set((K) map.keys.values[readPos], (V) map.values.values[readPos]);
+        kv = entry;
+      }
+
+      readPos += 1;
+
+      return kv;
     }
 
     @Override
-    protected MapData buildMap(Void map) {
-      return new ArrayBasedMapData(
-          new GenericArrayData(reusedKeyList.toArray()),
-          new GenericArrayData(reusedValueList.toArray()));
+    protected void addPair(ReusableMapData map, K key, V value) {
+      if (writePos >= map.capacity()) {
+        map.grow();
+      }
+
+      map.keys.values[writePos] = key;
+      map.values.values[writePos] = value;
+
+      writePos += 1;
+    }
+
+    @Override
+    protected MapData buildMap(ReusableMapData map) {
+      map.setNumElements(writePos);
+      return map;
     }
   }
 
@@ -452,6 +453,183 @@ public class SparkParquetReader {
     @Override
     protected void setDouble(GenericInternalRow row, int pos, double value) {
       row.setDouble(pos, value);
+    }
+  }
+
+  private static class ReusableMapData extends MapData {
+    private final ReusableArrayData keys;
+    private final ReusableArrayData values;
+    private int numElements;
+
+    private ReusableMapData() {
+      this.keys = new ReusableArrayData();
+      this.values = new ReusableArrayData();
+    }
+
+    private void grow() {
+      keys.grow();
+      values.grow();
+    }
+
+    private int capacity() {
+      return keys.capacity();
+    }
+
+    public void setNumElements(int numElements) {
+      this.numElements = numElements;
+      keys.setNumElements(numElements);
+      values.setNumElements(numElements);
+    }
+
+    @Override
+    public int numElements() {
+      return numElements;
+    }
+
+    @Override
+    public MapData copy() {
+      return new ArrayBasedMapData(keyArray().copy(), valueArray().copy());
+    }
+
+    @Override
+    public ReusableArrayData keyArray() {
+      return keys;
+    }
+
+    @Override
+    public ReusableArrayData valueArray() {
+      return values;
+    }
+  }
+
+  private static class ReusableArrayData extends ArrayData {
+    private static final Object[] EMPTY = new Object[0];
+
+    private Object[] values = EMPTY;
+    private int numElements = 0;
+
+    private void grow() {
+      if (values.length == 0) {
+        this.values = new Object[20];
+      } else {
+        Object[] old = values;
+        this.values = new Object[old.length << 2];
+        // copy the old array in case it has values that can be reused
+        System.arraycopy(old, 0, values, 0, old.length);
+      }
+    }
+
+    private int capacity() {
+      return values.length;
+    }
+
+    public void setNumElements(int numElements) {
+      this.numElements = numElements;
+    }
+
+    @Override
+    public Object get(int ordinal, DataType dataType) {
+      return values[ordinal];
+    }
+
+    @Override
+    public int numElements() {
+      return numElements;
+    }
+
+    @Override
+    public ArrayData copy() {
+      return new GenericArrayData(array());
+    }
+
+    @Override
+    public Object[] array() {
+      return Arrays.copyOfRange(values, 0, numElements);
+    }
+
+    @Override
+    public void setNullAt(int i) {
+      values[i] = null;
+    }
+
+    @Override
+    public void update(int ordinal, Object value) {
+      values[ordinal] = value;
+    }
+
+    @Override
+    public boolean isNullAt(int ordinal) {
+      return null == values[ordinal];
+    }
+
+    @Override
+    public boolean getBoolean(int ordinal) {
+      return (boolean) values[ordinal];
+    }
+
+    @Override
+    public byte getByte(int ordinal) {
+      return (byte) values[ordinal];
+    }
+
+    @Override
+    public short getShort(int ordinal) {
+      return (short) values[ordinal];
+    }
+
+    @Override
+    public int getInt(int ordinal) {
+      return (int) values[ordinal];
+    }
+
+    @Override
+    public long getLong(int ordinal) {
+      return (long) values[ordinal];
+    }
+
+    @Override
+    public float getFloat(int ordinal) {
+      return (float) values[ordinal];
+    }
+
+    @Override
+    public double getDouble(int ordinal) {
+      return (double) values[ordinal];
+    }
+
+    @Override
+    public Decimal getDecimal(int ordinal, int precision, int scale) {
+      return (Decimal) values[ordinal];
+    }
+
+    @Override
+    public UTF8String getUTF8String(int ordinal) {
+      return (UTF8String) values[ordinal];
+    }
+
+    @Override
+    public byte[] getBinary(int ordinal) {
+      return (byte[]) values[ordinal];
+    }
+
+    @Override
+    public CalendarInterval getInterval(int ordinal) {
+      return (CalendarInterval) values[ordinal];
+    }
+
+    @Override
+    public InternalRow getStruct(int ordinal, int numFields) {
+      return (InternalRow) values[ordinal];
+    }
+
+    @Override
+    public ArrayData getArray(int ordinal) {
+      return (ArrayData) values[ordinal];
+    }
+
+    @Override
+    public MapData getMap(int ordinal) {
+      return (MapData) values[ordinal];
     }
   }
 }
