@@ -47,7 +47,7 @@ import static com.netflix.iceberg.types.Types.NestedField.required;
 public class TestInclusiveMetricsEvaluator {
   private static final Schema SCHEMA = new Schema(
       required(1, "id", IntegerType.get()),
-      required(2, "cat", Types.StringType.get()), // categorical
+      optional(2, "no_stats", Types.IntegerType.get()),
       required(3, "required", Types.StringType.get()),
       optional(4, "all_nulls", Types.StringType.get()),
       optional(5, "some_nulls", Types.StringType.get()),
@@ -117,9 +117,9 @@ public class TestInclusiveMetricsEvaluator {
     DataFile missingStats = new TestDataFile("file.parquet", Row.of(), 50);
 
     Expression[] exprs = new Expression[] {
-        lessThan("id", 5), lessThanOrEqual("id", 30), equal("id", 70), greaterThan("id", 78),
-        greaterThanOrEqual("id", 90), notEqual("id", 101), isNull("some_nulls"),
-        notNull("some_nulls")
+        lessThan("no_stats", 5), lessThanOrEqual("no_stats", 30), equal("no_stats", 70),
+        greaterThan("no_stats", 78), greaterThanOrEqual("no_stats", 90), notEqual("no_stats", 101),
+        isNull("no_stats"), notNull("no_stats")
     };
 
     for (Expression expr : exprs) {
@@ -140,7 +140,7 @@ public class TestInclusiveMetricsEvaluator {
 
     for (Expression expr : exprs) {
       boolean shouldRead = new InclusiveMetricsEvaluator(SCHEMA, expr).eval(empty);
-      Assert.assertFalse("Should read when missing stats for expr: " + expr, shouldRead);
+      Assert.assertFalse("Should never read 0-record file: " + expr, shouldRead);
     }
   }
 
