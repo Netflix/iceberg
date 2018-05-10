@@ -228,25 +228,26 @@ public class StrictMetricsEvaluator {
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
 
-      if (lowerBounds != null && lowerBounds.containsKey(id)) {
+      if (lowerBounds != null && lowerBounds.containsKey(id) &&
+          upperBounds != null && upperBounds.containsKey(id)) {
         T lower = Conversions.fromByteBuffer(struct.field(id).type(), lowerBounds.get(id));
 
         int cmp = lit.comparator().compare(lower, lit.value());
         if (cmp != 0) {
           return ROWS_MIGHT_NOT_MATCH;
         }
-      }
 
-      if (upperBounds != null && upperBounds.containsKey(id)) {
         T upper = Conversions.fromByteBuffer(field.type(), upperBounds.get(id));
 
-        int cmp = lit.comparator().compare(upper, lit.value());
+        cmp = lit.comparator().compare(upper, lit.value());
         if (cmp != 0) {
           return ROWS_MIGHT_NOT_MATCH;
         }
+
+        return ROWS_MUST_MATCH;
       }
 
-      return ROWS_MUST_MATCH;
+      return ROWS_MIGHT_NOT_MATCH;
     }
 
     @Override
