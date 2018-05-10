@@ -27,10 +27,13 @@ import java.util.List;
 import java.util.Map;
 
 public class ParquetValueReaders {
+  private ParquetValueReaders() {
+  }
+
   public static <T> ParquetValueReader<T> option(Type type, int definitionLevel,
                                                  ParquetValueReader<T> reader) {
     if (type.isRepetition(Type.Repetition.OPTIONAL)) {
-      return new OptionReader<>(definitionLevel-1, reader);
+      return new OptionReader<>(definitionLevel, reader);
     }
     return reader;
   }
@@ -57,7 +60,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> children() {
+    public List<TripleIterator<?>> columns() {
       return children;
     }
   }
@@ -108,7 +111,7 @@ public class ParquetValueReaders {
       this.definitionLevel = definitionLevel;
       this.reader = reader;
       this.column = reader.column();
-      this.children = reader.children();
+      this.children = reader.columns();
     }
 
     @Override
@@ -135,7 +138,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> children() {
+    public List<TripleIterator<?>> columns() {
       return children;
     }
   }
@@ -152,7 +155,7 @@ public class ParquetValueReaders {
       this.repetitionLevel = repetitionLevel;
       this.reader = reader;
       this.column = reader.column();
-      this.children = reader.children();
+      this.children = reader.columns();
     }
 
     @Override
@@ -187,7 +190,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> children() {
+    public List<TripleIterator<?>> columns() {
       return children;
     }
 
@@ -216,8 +219,8 @@ public class ParquetValueReaders {
       this.valueReader = valueReader;
       this.column = keyReader.column();
       this.children = ImmutableList.<TripleIterator<?>>builder()
-          .addAll(keyReader.children())
-          .addAll(valueReader.children())
+          .addAll(keyReader.columns())
+          .addAll(valueReader.columns())
           .build();
     }
 
@@ -255,7 +258,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> children() {
+    public List<TripleIterator<?>> columns() {
       return children;
     }
 
@@ -322,7 +325,7 @@ public class ParquetValueReaders {
         this.readers[i] = readers.get(i);
         this.columns[i] = reader.column();
         this.setters[i] = newSetter(reader, type.getType(i));
-        columnsBuilder.addAll(reader.children());
+        columnsBuilder.addAll(reader.columns());
       }
 
       this.children = columnsBuilder.build();
@@ -351,7 +354,7 @@ public class ParquetValueReaders {
           //setters[i].set(intermediate, i);
         } else {
           setNull(intermediate, i);
-          for (TripleIterator<?> column : readers[i].children()) {
+          for (TripleIterator<?> column : readers[i].columns()) {
             column.nextNull();
           }
         }
@@ -361,7 +364,7 @@ public class ParquetValueReaders {
     }
 
     @Override
-    public List<TripleIterator<?>> children() {
+    public List<TripleIterator<?>> columns() {
       return children;
     }
 

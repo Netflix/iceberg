@@ -176,7 +176,7 @@ public abstract class ColumnIterator<T> implements TripleIterator<T> {
   }
 
   @Override
-  public <T1> T1 nextNull() {
+  public <N> N nextNull() {
     this.triplesRead += 1;
     advance();
     return pageIterator.nextNull();

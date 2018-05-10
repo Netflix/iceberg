@@ -126,5 +126,5 @@ interface TripleIterator<T> extends Iterator<T> {
    * @return null
    * @throws java.util.NoSuchElementException if there are no more elements
    */
-  <T> T nextNull();
+  <N> N nextNull();
 }

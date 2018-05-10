@@ -24,7 +24,7 @@ public interface ParquetValueReader<T> {
 
   TripleIterator<?> column();
 
-  List<TripleIterator<?>> children();
+  List<TripleIterator<?>> columns();
 
   void setPageSource(PageReadStore pageStore);
 }

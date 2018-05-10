@@ -89,7 +89,7 @@ public class SparkParquetReaders {
       int repeatedR = type.getMaxRepetitionLevel(repeatedPath)-1;
 
       Type elementType = repeated.getType(0);
-      int elementD = type.getMaxDefinitionLevel(path(elementType.getName()));
+      int elementD = type.getMaxDefinitionLevel(path(elementType.getName()))-1;
 
       return new ArrayReader<>(repeatedD, repeatedR, option(elementType, elementD, elementReader));
     }
@@ -105,9 +105,9 @@ public class SparkParquetReaders {
       int repeatedR = type.getMaxRepetitionLevel(repeatedPath)-1;
 
       Type keyType = repeatedKeyValue.getType(0);
-      int keyD = type.getMaxDefinitionLevel(path(keyType.getName()));
+      int keyD = type.getMaxDefinitionLevel(path(keyType.getName()))-1;
       Type valueType = repeatedKeyValue.getType(1);
-      int valueD = type.getMaxDefinitionLevel(path(valueType.getName()));
+      int valueD = type.getMaxDefinitionLevel(path(valueType.getName()))-1;
 
       return new MapReader<>(repeatedD, repeatedR,
           option(keyType, keyD, keyReader), option(valueType, valueD, valueReader));
