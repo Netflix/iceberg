@@ -32,5 +32,11 @@ import java.util.Set;
  * will throw a {@link CommitFailedException}.
  */
 public interface RewriteFiles extends PendingUpdate<Snapshot> {
-    RewriteFiles replaceFiles(Set<DataFile> filesToDelete, Set<DataFile> filesToAdd);
+    /**
+     *
+     * @param filesToDelete files that will be deleted, can not be null or empty.
+     * @param filesToAdd files that will be added, can not be null or empty.
+     * @return this for chaining.
+     */
+    RewriteFiles rewriteFiles(Set<DataFile> filesToDelete, Set<DataFile> filesToAdd);
 }

@@ -29,7 +29,9 @@ import java.util.Collections;
 import java.util.Iterator;
 
 import static com.google.common.collect.Iterators.concat;
-import static com.netflix.iceberg.ManifestEntry.Status.*;
+import static com.netflix.iceberg.ManifestEntry.Status.ADDED;
+import static com.netflix.iceberg.ManifestEntry.Status.DELETED;
+import static com.netflix.iceberg.ManifestEntry.Status.EXISTING;
 
 public class TestReplaceFiles extends TableTestBase {
 
@@ -41,26 +43,39 @@ public class TestReplaceFiles extends TableTestBase {
     Assert.assertNull("Should not have a current snapshot", base.currentSnapshot());
 
     table.newRewrite()
-        .replaceFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B))
-        .apply();
+            .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B))
+            .apply();
   }
 
-  @Test(expected = ValidationException.class)
+  @Test
   public void testAddOnly() {
     Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
 
-    table.newRewrite()
-            .replaceFiles(Sets.newSet(FILE_A), Collections.emptySet())
-            .apply();
+    AssertHelpers.assertThrows("Expected an exception",
+            IllegalArgumentException.class,
+            "files to add can not be null or empty",
+            () -> {
+              table.newRewrite()
+                      .rewriteFiles(Sets.newSet(FILE_A), Collections.emptySet())
+                      .apply();
+            }
+    );
   }
 
-  @Test(expected = ValidationException.class)
+  @Test
   public void testDeleteOnly() {
     Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
 
-    table.newRewrite()
-            .replaceFiles(Collections.emptySet(), Sets.newSet(FILE_A))
-            .apply();
+    AssertHelpers.assertThrows("Expected an exception",
+            IllegalArgumentException.class,
+            "files to delete can not be null or empty",
+            () -> {
+              table.newRewrite()
+                      .rewriteFiles(Collections.emptySet(), Sets.newSet(FILE_A))
+                      .apply();
+            }
+    );
+
   }
 
   @Test
@@ -79,13 +94,13 @@ public class TestReplaceFiles extends TableTestBase {
     String initialManifest = base.currentSnapshot().manifests().get(0);
 
     Snapshot pending = table.newRewrite()
-            .replaceFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_C))
+            .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_C))
             .apply();
 
     Assert.assertEquals("Should contain 2 manifest",
             2, pending.manifests().size());
-    Assert.assertNotEquals("Should not contain manifest from initial write",
-            initialManifest, pending.manifests().get(0));
+    Assert.assertFalse("Should not contain manifest from initial write",
+            pending.manifests().contains(initialManifest));
 
     long pendingId = pending.snapshotId();
 
@@ -98,18 +113,21 @@ public class TestReplaceFiles extends TableTestBase {
             ids(pendingId),
             concat(files(FILE_C)),
             statuses(ADDED));
+
+    // We should only get the 3 manifests that this test is expected to add.
+    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
   }
 
   @Test
   public void testFailure() {
     table.newAppend()
-        .appendFile(FILE_A)
-        .commit();
+            .appendFile(FILE_A)
+            .commit();
 
     table.ops().failCommits(5);
 
     RewriteFiles rewrite = table.newRewrite()
-            .replaceFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B));
+            .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B));
     Snapshot pending = rewrite.apply();
 
     Assert.assertEquals("Should produce 2 manifests", 2, pending.manifests().size());
@@ -120,21 +138,24 @@ public class TestReplaceFiles extends TableTestBase {
     validateManifest(manifest2, ids(pending.snapshotId()), concat(files(FILE_B)), statuses(ADDED));
 
     AssertHelpers.assertThrows("Should retry 4 times and throw last failure",
-        CommitFailedException.class, "Injected failure", rewrite::commit);
+            CommitFailedException.class, "Injected failure", rewrite::commit);
 
     Assert.assertFalse("Should clean up new manifest", new File(manifest1).exists());
     Assert.assertFalse("Should clean up new manifest", new File(manifest2).exists());
+
+    // As commit failed all the manifests added with rewrite should be cleaned up
+    Assert.assertEquals("Only 1 manifest should exist", 1, listMetadataFiles("avro").size());
   }
 
   @Test
   public void testRecovery() {
     table.newAppend()
-        .appendFile(FILE_A)
-        .commit();
+            .appendFile(FILE_A)
+            .commit();
 
     table.ops().failCommits(3);
 
-    RewriteFiles rewrite = table.newRewrite().replaceFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B));
+    RewriteFiles rewrite = table.newRewrite().rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B));
     Snapshot pending = rewrite.apply();
 
     Assert.assertEquals("Should produce 2 manifests", 2, pending.manifests().size());
@@ -150,10 +171,13 @@ public class TestReplaceFiles extends TableTestBase {
     Assert.assertTrue("Should reuse the new manifest", new File(manifest1).exists());
     Assert.assertTrue("Should reuse the new manifest", new File(manifest2).exists());
     Assert.assertEquals("Should commit the same new manifest during retry",
-        Lists.newArrayList(manifest1, manifest2), metadata.currentSnapshot().manifests());
+            Lists.newArrayList(manifest1, manifest2), metadata.currentSnapshot().manifests());
+
+    // 2 manifests added by rewrite and 1 original manifest should be found.
+    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
   }
 
-  @Test(expected = CommitFailedException.class)
+  @Test
   public void testDeleteNonExistentFile() {
     Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
 
@@ -166,12 +190,20 @@ public class TestReplaceFiles extends TableTestBase {
     Assert.assertEquals("Should create 1 manifest for initial write",
             1, base.currentSnapshot().manifests().size());
 
-    table.newRewrite()
-            .replaceFiles(Sets.newSet(FILE_C), Sets.newSet(FILE_D))
-            .apply();
+    AssertHelpers.assertThrows("Expected an exception",
+            CommitFailedException.class,
+            "files /path/to/data-c.parquet are no longer available in any manifests",
+            () -> {
+              table.newRewrite()
+                      .rewriteFiles(Sets.newSet(FILE_C), Sets.newSet(FILE_D))
+                      .apply();
+            }
+    );
+
+    Assert.assertEquals("Only 1 manifests should exist", 1, listMetadataFiles("avro").size());
   }
 
-  @Test(expected = CommitFailedException.class)
+  @Test
   public void testAlreadyDeletedFile() {
     Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
 
@@ -185,7 +217,7 @@ public class TestReplaceFiles extends TableTestBase {
 
     final RewriteFiles rewrite = table.newRewrite();
     final Snapshot pending = rewrite
-            .replaceFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B))
+            .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_B))
             .apply();
 
     Assert.assertEquals("Should contain 2 manifest",
@@ -205,12 +237,19 @@ public class TestReplaceFiles extends TableTestBase {
 
     rewrite.commit();
 
-    table.newRewrite()
-            .replaceFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_D))
-            .apply();
+    AssertHelpers.assertThrows("Expected an exception",
+            CommitFailedException.class,
+            "files /path/to/data-a.parquet are no longer available in any manifests",
+            () -> {
+              table.newRewrite()
+                      .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_D))
+                      .apply();
+            }
+    );
+
+    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
   }
-
-
+  
   private static Iterator<Long> ids(Long... ids) {
     return Iterators.forArray(ids);
   }
