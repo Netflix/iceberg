@@ -17,7 +17,6 @@
 package com.netflix.iceberg;
 
 import com.google.common.base.Preconditions;
-import com.google.common.collect.Iterators;
 import com.netflix.iceberg.exceptions.CommitFailedException;
 import com.netflix.iceberg.exceptions.RuntimeIOException;
 import com.netflix.iceberg.exceptions.ValidationException;
@@ -28,13 +27,11 @@ import com.netflix.iceberg.util.ThreadPools;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.HashSet;
-import java.util.Iterator;
 import java.util.List;
 import java.util.Set;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.stream.Collectors;
 
-import static com.netflix.iceberg.ManifestEntry.Status.DELETED;
 import static java.lang.String.format;
 import static java.util.Collections.synchronizedList;
 
@@ -43,10 +40,11 @@ class ReplaceFiles extends SnapshotUpdate implements RewriteFiles {
   private final TableOperations ops;
   private final Set<DataFile> filesToAdd = new HashSet<>();
   private final Set<CharSequence> pathsToDelete = new HashSet<>();
-  private final List<String> newManifests = new ArrayList<>();
-  private List<String> cachedManifests = new ArrayList<>();
+  private final List<String> newManifests = synchronizedList(new ArrayList<>());
+  private List<String> manifestsToCommit = synchronizedList(new ArrayList<>());
+  private List<String> appendManifests = new ArrayList<>();
   private final AtomicInteger manifestCount = new AtomicInteger(0);
-  private boolean hasChanges = false;
+  private boolean hasNewFiles;
 
   ReplaceFiles(TableOperations ops) {
     super(ops);
@@ -55,20 +53,20 @@ class ReplaceFiles extends SnapshotUpdate implements RewriteFiles {
 
   /**
    * @param base TableMetadata of the base snapshot
-   * @return list of manifests that "may" get committed if commit is called on this instance.
+   * @return list of manifestsToCommit that "may" get committed if commit is called on this instance.
    */
   @Override
   protected List<String> apply(TableMetadata base) {
     Preconditions.checkArgument(!(this.pathsToDelete.isEmpty() || this.filesToAdd.isEmpty()),
             "Must provide some files to add and delete.");
 
-    if (this.hasChanges) {
-      final Snapshot snapshot = base.currentSnapshot();
+    this.manifestsToCommit.clear(); //clear the state.
+
+    final Snapshot snapshot = base.currentSnapshot();
       ValidationException.check(snapshot != null, "No snapshots are committed.");
 
       final List<String> currentManifests = snapshot.manifests();
       final List<CharSequence> deletedPaths = synchronizedList(new ArrayList<>());
-      final List<String> addedManifests = synchronizedList(new ArrayList<>());
 
       Tasks.foreach(currentManifests)
         .noRetry()
@@ -80,9 +78,8 @@ class ReplaceFiles extends SnapshotUpdate implements RewriteFiles {
           try (ManifestReader manifestReader = ManifestReader.read(ops.newInputFile(manifest))) {
             int numDeletedFiles = deletedPaths.size();
             try (ManifestWriter writer = new ManifestWriter(manifestReader.spec(), manifestPath, snapshotId())) {
-              final Iterator<ManifestEntry> manifestItr = manifestReader.entries().iterator();
-              Iterators.filter(manifestItr, entry -> entry.status() != DELETED)
-                .forEachRemaining(manifestEntry -> {
+              manifestReader.notDeletedEntries()
+                .forEach(manifestEntry -> {
                   if (this.pathsToDelete.contains(manifestEntry.file().path())) {
                     writer.delete(manifestEntry);
                     deletedPaths.add(manifestEntry.file().path());
@@ -96,9 +93,10 @@ class ReplaceFiles extends SnapshotUpdate implements RewriteFiles {
             // manifest and keep the existing manifest in the new snapshot as is.
             if (numDeletedFiles == deletedPaths.size()) {
               deleteFile(manifestPath.location());
-              addedManifests.add(manifest);
+              this.manifestsToCommit.add(manifest);
             } else {
-              addedManifests.add(manifestPath.location());
+              this.manifestsToCommit.add(manifestPath.location());
+              this.newManifests.add(manifestPath.location());
             }
           } catch (IOException e) {
             throw new RuntimeIOException(e, "Could not read manifestFile ", manifest);
@@ -109,38 +107,33 @@ class ReplaceFiles extends SnapshotUpdate implements RewriteFiles {
         final String paths = pathsToDelete.stream()
                 .filter(path -> !deletedPaths.contains(path))
                 .collect(Collectors.joining(","));
-        String msg = format("files %s are no longer available in any manifests", paths);
+        String msg = format("files %s are no longer available in any manifestsToCommit", paths);
         throw new CommitFailedException(msg);
       }
 
-      addedManifests.add(fastAppendFilesToAdd(base.spec()).location());
+    addFiles(base.spec());
 
-      this.cachedManifests = addedManifests;
-      this.newManifests.addAll(addedManifests);
-      this.hasChanges = false;
-      return addedManifests;
-    } else {
-      return this.cachedManifests;
-    }
+    return this.manifestsToCommit;
   }
 
-  private OutputFile fastAppendFilesToAdd(PartitionSpec spec) {
-    OutputFile out = manifestPath(manifestCount.getAndIncrement());
-    try (ManifestWriter writer = new ManifestWriter(spec, out, snapshotId())) {
-      writer.addAll(this.filesToAdd);
-    } catch (IOException e) {
-      throw new RuntimeIOException(e, "Failed to write manifest: %s", out);
+  private void addFiles(PartitionSpec spec) {
+    if (this.hasNewFiles) {
+      OutputFile out = manifestPath(manifestCount.getAndIncrement());
+      try (ManifestWriter writer = new ManifestWriter(spec, out, snapshotId())) {
+        writer.addAll(this.filesToAdd);
+      } catch (IOException e) {
+        throw new RuntimeIOException(e, "Failed to write manifest: %s", out);
+      }
+      appendManifests.add(out.location());
+      newManifests.add(out.location());
     }
-    return out;
+    this.hasNewFiles = false;
+    manifestsToCommit.addAll(appendManifests);
   }
 
   @Override
   protected void cleanUncommitted(Set<String> committed) {
-    for (String newManifest : newManifests) {
-      if (!committed.contains(newManifest)) {
-        deleteFile(newManifest);
-      }
-    }
+    newManifests.stream().filter(m -> !committed.contains(m)).forEach(m -> deleteFile(m));
     newManifests.clear();
   }
 
@@ -151,7 +144,7 @@ class ReplaceFiles extends SnapshotUpdate implements RewriteFiles {
 
     this.pathsToDelete.addAll(filesToDelete.stream().map(d -> d.path()).collect(Collectors.toList()));
     this.filesToAdd.addAll(filesToAdd);
-    this.hasChanges = true;
+    this.hasNewFiles = true;
     return this;
   }
 }

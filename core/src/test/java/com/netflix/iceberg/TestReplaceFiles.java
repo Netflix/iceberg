@@ -167,11 +167,12 @@ public class TestReplaceFiles extends TableTestBase {
 
     rewrite.commit();
 
+    Assert.assertFalse("Should not reuse the manifest with deletes", new File(manifest1).exists());
+    Assert.assertTrue("Should reuse the manifest for appends", new File(manifest2).exists());
+
     TableMetadata metadata = readMetadata();
-    Assert.assertTrue("Should reuse the new manifest", new File(manifest1).exists());
-    Assert.assertTrue("Should reuse the new manifest", new File(manifest2).exists());
-    Assert.assertEquals("Should commit the same new manifest during retry",
-            Lists.newArrayList(manifest1, manifest2), metadata.currentSnapshot().manifests());
+    Assert.assertTrue("Should commit the manifest for append",
+            metadata.currentSnapshot().manifests().contains(manifest2));
 
     // 2 manifests added by rewrite and 1 original manifest should be found.
     Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());

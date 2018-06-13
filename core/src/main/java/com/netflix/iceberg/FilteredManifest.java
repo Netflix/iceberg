@@ -58,7 +58,7 @@ public class FilteredManifest implements Filterable<FilteredManifest> {
   @Override
   public Iterator<DataFile> iterator() {
     return Iterators.transform(
-        Iterators.filter(reader.iterator(partFilter, columns), new Predicate<DataFile>() {
+        Iterators.filter(reader.iterator(columns), new Predicate<DataFile>() {
           private final Evaluator evaluator = new Evaluator(reader.spec().partitionType(), partFilter);
 
           @Override
