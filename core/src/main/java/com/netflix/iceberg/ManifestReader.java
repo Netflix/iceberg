@@ -32,7 +32,6 @@ import com.netflix.iceberg.types.Types;
 import com.netflix.iceberg.util.Pair;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-
 import java.io.IOException;
 import java.util.Collection;
 import java.util.Iterator;
@@ -123,7 +122,7 @@ public class ManifestReader extends ClosingIterable implements Filterable<Filter
 
   @Override
   public Iterator<DataFile> iterator() {
-    return iterator(ALL_COLUMNS);
+    return iterator(Expressions.alwaysTrue(), ALL_COLUMNS);
   }
 
   @Override
@@ -213,17 +212,11 @@ public class ManifestReader extends ClosingIterable implements Filterable<Filter
   }
 
   // visible for use by PartialManifest
-  Iterator<DataFile> iterator(Collection<String> columns) {
+  Iterator<DataFile> iterator(Expression filter, Collection<String> columns) {
     return Iterables.transform(Iterables.filter(
         entries(columns),
         entry -> entry.status() != DELETED),
         ManifestEntry::file).iterator();
-  }
-
-  Iterable<ManifestEntry> notDeletedEntries() {
-    return Iterables.filter(
-            entries(ALL_COLUMNS),
-            entry -> entry.status() != DELETED);
   }
 
 }

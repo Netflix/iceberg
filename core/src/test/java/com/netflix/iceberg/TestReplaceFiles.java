@@ -192,12 +192,12 @@ public class TestReplaceFiles extends TableTestBase {
             1, base.currentSnapshot().manifests().size());
 
     AssertHelpers.assertThrows("Expected an exception",
-            CommitFailedException.class,
+            ValidationException.class,
             "files /path/to/data-c.parquet are no longer available in any manifests",
             () -> {
               table.newRewrite()
                       .rewriteFiles(Sets.newSet(FILE_C), Sets.newSet(FILE_D))
-                      .apply();
+                      .commit();
             }
     );
 
@@ -239,12 +239,12 @@ public class TestReplaceFiles extends TableTestBase {
     rewrite.commit();
 
     AssertHelpers.assertThrows("Expected an exception",
-            CommitFailedException.class,
+            ValidationException.class,
             "files /path/to/data-a.parquet are no longer available in any manifests",
             () -> {
               table.newRewrite()
                       .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_D))
-                      .apply();
+                      .commit();
             }
     );
 
