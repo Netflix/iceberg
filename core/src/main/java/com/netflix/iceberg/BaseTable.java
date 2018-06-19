@@ -16,7 +16,6 @@
 
 package com.netflix.iceberg;
 
-import com.google.common.base.Objects;
 import java.util.Map;
 
 /**
@@ -111,6 +110,11 @@ public class BaseTable implements Table {
   @Override
   public Rollback rollback() {
     return new RollbackToSnapshot(ops);
+  }
+
+  @Override
+  public OverwriteFiles newOverwrite() {
+    return new OverwriteFilesImpl(ops);
   }
 
   @Override

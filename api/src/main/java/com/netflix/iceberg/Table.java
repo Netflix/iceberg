@@ -143,4 +143,11 @@ public interface Table {
    * @return a new {@link Rollback}
    */
   Rollback rollback();
+
+  /**
+   * Create a new {@link OverwriteFiles overwrite API} to overwrite a partition's data.
+   *
+   * @return a new {@link OverwriteFiles}
+   */
+  OverwriteFiles newOverwrite();
 }
