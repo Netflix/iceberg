@@ -19,6 +19,7 @@ package com.netflix.iceberg.spark.data;
 import com.google.common.collect.ImmutableMap;
 import com.netflix.iceberg.Files;
 import com.netflix.iceberg.Schema;
+import com.netflix.iceberg.expressions.Expressions;
 import com.netflix.iceberg.io.FileAppender;
 import com.netflix.iceberg.parquet.ParquetAvroValueReaders;
 import com.netflix.iceberg.parquet.ParquetReader;
@@ -26,6 +27,7 @@ import com.netflix.iceberg.parquet.ParquetSchemaUtil;
 import com.netflix.iceberg.parquet.ParquetWriter;
 import com.netflix.iceberg.types.Types;
 import org.apache.avro.generic.GenericData.Record;
+import org.apache.parquet.ParquetReadOptions;
 import org.apache.parquet.schema.MessageType;
 import org.junit.Assert;
 import org.junit.Rule;
@@ -84,7 +86,9 @@ public class TestParquetAvroWriter {
 
     // verify that the new read path is correct
     try (ParquetReader<Record> reader = new ParquetReader<>(
-        Files.localInput(testFile), ParquetAvroValueReaders.buildReader(readSchema, COMPLEX_SCHEMA))) {
+        Files.localInput(testFile), COMPLEX_SCHEMA, ParquetReadOptions.builder().build(),
+        fileSchema -> ParquetAvroValueReaders.buildReader(COMPLEX_SCHEMA, readSchema),
+        Expressions.alwaysTrue())) {
       int i = 0;
       for (Record actual : reader) {
         Record expected = records.get(i);

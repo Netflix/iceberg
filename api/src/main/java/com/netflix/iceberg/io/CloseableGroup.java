@@ -21,7 +21,7 @@ import java.io.Closeable;
 import java.io.IOException;
 import java.util.LinkedList;
 
-public abstract class ClosingIterable implements Closeable {
+public abstract class CloseableGroup implements Closeable {
   private final LinkedList<Closeable> closeables = Lists.newLinkedList();
 
   protected void addCloseable(Closeable closeable) {

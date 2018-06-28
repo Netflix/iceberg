@@ -16,14 +16,23 @@
 
 package com.netflix.iceberg.spark.data;
 
-import com.netflix.iceberg.parquet.ParquetTypeVisitor;
+import com.google.common.collect.ImmutableList;
+import com.google.common.collect.Lists;
+import com.google.common.collect.Maps;
+import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.parquet.ParquetValueReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders;
+import com.netflix.iceberg.parquet.ParquetValueReaders.FloatAsDoubleReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.IntAsLongReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.PrimitiveReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedKeyValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.ReusableEntry;
 import com.netflix.iceberg.parquet.ParquetValueReaders.StructReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.UnboxedReader;
+import com.netflix.iceberg.parquet.TypeWithSchemaVisitor;
+import com.netflix.iceberg.types.Type.TypeID;
+import com.netflix.iceberg.types.Types;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
@@ -56,11 +65,14 @@ public class SparkParquetReaders {
   }
 
   @SuppressWarnings("unchecked")
-  public static ParquetValueReader<InternalRow> buildReader(MessageType type) {
-    return (ParquetValueReader<InternalRow>) ParquetTypeVisitor.visit(type, new ReadBuilder(type));
+  public static ParquetValueReader<InternalRow> buildReader(Schema expectedSchema,
+                                                            MessageType fileSchema) {
+    return (ParquetValueReader<InternalRow>)
+        TypeWithSchemaVisitor.visit(expectedSchema.asStruct(), fileSchema,
+            new ReadBuilder(fileSchema));
   }
 
-  private static class ReadBuilder extends ParquetTypeVisitor<ParquetValueReader<?>> {
+  private static class ReadBuilder extends TypeWithSchemaVisitor<ParquetValueReader<?>> {
     private final MessageType type;
 
     ReadBuilder(MessageType type) {
@@ -68,20 +80,49 @@ public class SparkParquetReaders {
     }
 
     @Override
-    public ParquetValueReader<?> message(MessageType message,
+    public ParquetValueReader<?> message(Types.StructType expected, MessageType message,
                                          List<ParquetValueReader<?>> fieldReaders) {
-      return struct(message.asGroupType(), fieldReaders);
+      return struct(expected, message.asGroupType(), fieldReaders);
     }
 
     @Override
-    public ParquetValueReader<?> struct(GroupType struct,
+    public ParquetValueReader<?> struct(Types.StructType expected, GroupType struct,
                                         List<ParquetValueReader<?>> fieldReaders) {
-      int structD = type.getMaxDefinitionLevel(currentPath());
-      return new InternalRowReader(struct, structD, fieldReaders);
+      // match the expected struct's order
+      Map<Integer, ParquetValueReader<?>> readersById = Maps.newHashMap();
+      Map<Integer, Type> typesById = Maps.newHashMap();
+      List<Type> fields = struct.getFields();
+      for (int i = 0; i < fields.size(); i += 1) {
+        Type fieldType = fields.get(i);
+        int fieldD = type.getMaxDefinitionLevel(path(fieldType.getName()))-1;
+        int id = fieldType.getId().intValue();
+        readersById.put(id, option(fieldType, fieldD, fieldReaders.get(i)));
+        typesById.put(id, fieldType);
+      }
+
+      List<Types.NestedField> expectedFields = expected != null ?
+          expected.fields() : ImmutableList.of();
+      List<ParquetValueReader<?>> reorderedFields = Lists.newArrayListWithExpectedSize(
+          expectedFields.size());
+      List<Type> types = Lists.newArrayListWithExpectedSize(expectedFields.size());
+      for (Types.NestedField field : expectedFields) {
+        int id = field.fieldId();
+        ParquetValueReader<?> reader = readersById.get(id);
+        if (reader != null) {
+          reorderedFields.add(reader);
+          types.add(typesById.get(id));
+        } else {
+          reorderedFields.add(ParquetValueReaders.nulls());
+          types.add(null);
+        }
+      }
+
+      return new InternalRowReader(types, reorderedFields);
     }
 
     @Override
-    public ParquetValueReader<?> list(GroupType array, ParquetValueReader<?> elementReader) {
+    public ParquetValueReader<?> list(Types.ListType expectedList, GroupType array,
+                                      ParquetValueReader<?> elementReader) {
       GroupType repeated = array.getFields().get(0).asGroupType();
       String[] repeatedPath = currentPath();
 
@@ -95,7 +136,7 @@ public class SparkParquetReaders {
     }
 
     @Override
-    public ParquetValueReader<?> map(GroupType map,
+    public ParquetValueReader<?> map(Types.MapType expectedMap, GroupType map,
                                      ParquetValueReader<?> keyReader,
                                      ParquetValueReader<?> valueReader) {
       GroupType repeatedKeyValue = map.getFields().get(0).asGroupType();
@@ -114,7 +155,8 @@ public class SparkParquetReaders {
     }
 
     @Override
-    public ParquetValueReader<?> primitive(PrimitiveType primitive) {
+    public ParquetValueReader<?> primitive(com.netflix.iceberg.types.Type.PrimitiveType expected,
+                                           PrimitiveType primitive) {
       ColumnDescriptor desc = type.getColumnDescription(currentPath());
 
       if (primitive.getOriginalType() != null) {
@@ -158,10 +200,20 @@ public class SparkParquetReaders {
         case FIXED_LEN_BYTE_ARRAY:
         case BINARY:
           return new BytesReader(desc);
-        case BOOLEAN:
         case INT32:
-        case INT64:
+          if (expected != null && expected.typeId() == TypeID.LONG) {
+            return new IntAsLongReader(desc);
+          } else {
+            return new UnboxedReader<>(desc);
+          }
         case FLOAT:
+          if (expected != null && expected.typeId() == TypeID.DOUBLE) {
+            return new FloatAsDoubleReader(desc);
+          } else {
+            return new UnboxedReader<>(desc);
+          }
+        case BOOLEAN:
+        case INT64:
         case DOUBLE:
           return new UnboxedReader<>(desc);
         default:
@@ -396,14 +448,14 @@ public class SparkParquetReaders {
   private static class InternalRowReader extends StructReader<InternalRow, GenericInternalRow> {
     private final int numFields;
 
-    InternalRowReader(GroupType type, int definitionLevel, List<ParquetValueReader<?>> readers) {
-      super(type, definitionLevel, readers);
+    InternalRowReader(List<Type> types, List<ParquetValueReader<?>> readers) {
+      super(types, readers);
       this.numFields = readers.size();
     }
 
     @Override
-    protected GenericInternalRow newStructData(GroupType type, InternalRow reuse) {
-      if (reuse != null && reuse instanceof GenericInternalRow) {
+    protected GenericInternalRow newStructData(InternalRow reuse) {
+      if (reuse instanceof GenericInternalRow) {
         return (GenericInternalRow) reuse;
       } else {
         return new GenericInternalRow(numFields);
@@ -547,12 +599,12 @@ public class SparkParquetReaders {
       return Arrays.copyOfRange(values, 0, numElements);
     }
 
-    @Override
+//    @Override
     public void setNullAt(int i) {
       values[i] = null;
     }
 
-    @Override
+//    @Override
     public void update(int ordinal, Object value) {
       values[ordinal] = value;
     }

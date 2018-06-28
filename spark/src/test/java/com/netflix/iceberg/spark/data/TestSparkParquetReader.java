@@ -18,14 +18,12 @@ package com.netflix.iceberg.spark.data;
 
 import com.netflix.iceberg.Files;
 import com.netflix.iceberg.Schema;
+import com.netflix.iceberg.io.CloseableIterable;
 import com.netflix.iceberg.io.FileAppender;
 import com.netflix.iceberg.parquet.Parquet;
-import com.netflix.iceberg.parquet.ParquetReader;
-import com.netflix.iceberg.parquet.ParquetSchemaUtil;
 import com.netflix.iceberg.types.TypeUtil;
 import com.netflix.iceberg.types.Types;
 import org.apache.avro.generic.GenericData;
-import org.apache.parquet.schema.MessageType;
 import org.apache.spark.sql.catalyst.InternalRow;
 import org.junit.Assert;
 import org.junit.Assume;
@@ -53,9 +51,10 @@ public class TestSparkParquetReader extends AvroDataTest {
       writer.addAll(expected);
     }
 
-    MessageType messageType = ParquetSchemaUtil.convert(schema, "test");
-    try (ParquetReader<InternalRow> reader = new ParquetReader<>(
-        Files.localInput(testFile), SparkParquetReaders.buildReader(messageType))) {
+    try (CloseableIterable<InternalRow> reader = Parquet.read(Files.localInput(testFile))
+        .project(schema)
+        .createReaderFunc(type -> SparkParquetReaders.buildReader(schema, type))
+        .build()) {
       Iterator<InternalRow> rows = reader.iterator();
       for (int i = 0; i < expected.size(); i += 1) {
         Assert.assertTrue("Should have expected number of rows", rows.hasNext());

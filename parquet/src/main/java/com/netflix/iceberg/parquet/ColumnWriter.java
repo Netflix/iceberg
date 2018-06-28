@@ -23,7 +23,7 @@ import org.apache.parquet.io.api.Binary;
 public abstract class ColumnWriter<T> implements TripleWriter<T> {
   @SuppressWarnings("unchecked")
   static <T> ColumnWriter<T> newWriter(ColumnDescriptor desc) {
-    switch (desc.getPrimitiveType().getPrimitiveTypeName()) {
+    switch (desc.getType()) {
       case BOOLEAN:
         return (ColumnWriter<T>) new ColumnWriter<Boolean>(desc) {
           @Override

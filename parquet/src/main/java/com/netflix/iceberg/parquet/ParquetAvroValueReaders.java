@@ -16,15 +16,21 @@
 
 package com.netflix.iceberg.parquet;
 
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterators;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.netflix.iceberg.avro.AvroSchemaUtil;
+import com.netflix.iceberg.parquet.ParquetValueReaders.FloatAsDoubleReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.IntAsLongReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.IntegerAsDecimalReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.LongAsDecimalReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedKeyValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.ReusableEntry;
 import com.netflix.iceberg.parquet.ParquetValueReaders.StructReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.UnboxedReader;
+import com.netflix.iceberg.types.Type.TypeID;
 import com.netflix.iceberg.types.Types;
 import org.apache.avro.Schema;
 import org.apache.avro.generic.GenericData.Fixed;
@@ -53,46 +59,70 @@ public class ParquetAvroValueReaders {
   }
 
   @SuppressWarnings("unchecked")
-  public static ParquetValueReader<Record> buildReader(MessageType readSchema,
-                                                       com.netflix.iceberg.Schema schema) {
-    return (ParquetValueReader<Record>) ParquetTypeVisitor
-        .visit(readSchema, new ReadBuilder(readSchema, schema));
+  public static ParquetValueReader<Record> buildReader(com.netflix.iceberg.Schema expectedSchema,
+                                                       MessageType fileSchema) {
+    return (ParquetValueReader<Record>)
+        TypeWithSchemaVisitor.visit(expectedSchema.asStruct(), fileSchema,
+            new ReadBuilder(expectedSchema, fileSchema));
   }
 
-  private static class ReadBuilder extends ParquetTypeVisitor<ParquetValueReader<?>> {
-    private final MessageType type;
+  private static class ReadBuilder extends TypeWithSchemaVisitor<ParquetValueReader<?>> {
     private final com.netflix.iceberg.Schema schema;
     private final Map<com.netflix.iceberg.types.Type, Schema> avroSchemas;
+    private final MessageType type;
 
-    ReadBuilder(MessageType type, com.netflix.iceberg.Schema schema) {
-      this.type = type;
+    ReadBuilder(com.netflix.iceberg.Schema schema, MessageType type) {
       this.schema = schema;
       this.avroSchemas = AvroSchemaUtil.convertTypes(schema.asStruct(), type.getName());
+      this.type = type;
     }
 
     @Override
-    public ParquetValueReader<?> message(MessageType message,
+    public ParquetValueReader<?> message(Types.StructType expected, MessageType message,
                                          List<ParquetValueReader<?>> fieldReaders) {
-      return struct(message.asGroupType(), fieldReaders);
+      return struct(expected, message.asGroupType(), fieldReaders);
     }
 
     @Override
-    public ParquetValueReader<?> struct(GroupType struct,
+    public ParquetValueReader<?> struct(Types.StructType expected, GroupType struct,
                                         List<ParquetValueReader<?>> fieldReaders) {
-      Schema avroSchema;
-      if (struct == type) {
-        avroSchema = avroSchemas.get(schema.asStruct());
-      } else {
-        int fieldId = struct.getId().intValue();
-        Types.NestedField field = schema.findField(fieldId);
-        avroSchema = avroSchemas.get(field.type());
+      Schema avroSchema = avroSchemas.get(expected);
+
+      // match the expected struct's order
+      Map<Integer, ParquetValueReader<?>> readersById = Maps.newHashMap();
+      Map<Integer, Type> typesById = Maps.newHashMap();
+      List<Type> fields = struct.getFields();
+      for (int i = 0; i < fields.size(); i += 1) {
+        Type fieldType = fields.get(i);
+        int fieldD = type.getMaxDefinitionLevel(path(fieldType.getName()))-1;
+        int id = fieldType.getId().intValue();
+        readersById.put(id, option(fieldType, fieldD, fieldReaders.get(i)));
+        typesById.put(id, fieldType);
       }
-      int structD = type.getMaxDefinitionLevel(currentPath());
-      return new RecordReader(struct, structD, fieldReaders, avroSchema);
+
+      List<Types.NestedField> expectedFields = expected != null ?
+          expected.fields() : ImmutableList.of();
+      List<ParquetValueReader<?>> reorderedFields = Lists.newArrayListWithExpectedSize(
+          expectedFields.size());
+      List<Type> types = Lists.newArrayListWithExpectedSize(expectedFields.size());
+      for (Types.NestedField field : expectedFields) {
+        int id = field.fieldId();
+        ParquetValueReader<?> reader = readersById.get(id);
+        if (reader != null) {
+          reorderedFields.add(reader);
+          types.add(typesById.get(id));
+        } else {
+          reorderedFields.add(ParquetValueReaders.nulls());
+          types.add(null);
+        }
+      }
+
+      return new RecordReader(types, reorderedFields, avroSchema);
     }
 
     @Override
-    public ParquetValueReader<?> list(GroupType array, ParquetValueReader<?> elementReader) {
+    public ParquetValueReader<?> list(Types.ListType expectedList, GroupType array,
+                                      ParquetValueReader<?> elementReader) {
       GroupType repeated = array.getFields().get(0).asGroupType();
       String[] repeatedPath = currentPath();
 
@@ -106,7 +136,7 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public ParquetValueReader<?> map(GroupType map,
+    public ParquetValueReader<?> map(Types.MapType expectedMap, GroupType map,
                                      ParquetValueReader<?> keyReader,
                                      ParquetValueReader<?> valueReader) {
       GroupType repeatedKeyValue = map.getFields().get(0).asGroupType();
@@ -125,7 +155,8 @@ public class ParquetAvroValueReaders {
     }
 
     @Override
-    public ParquetValueReader<?> primitive(PrimitiveType primitive) {
+    public ParquetValueReader<?> primitive(com.netflix.iceberg.types.Type.PrimitiveType expected,
+                                           PrimitiveType primitive) {
       ColumnDescriptor desc = type.getColumnDescription(currentPath());
 
       boolean isMapKey = fieldNames.contains("key");
@@ -157,6 +188,10 @@ public class ParquetAvroValueReaders {
               case BINARY:
               case FIXED_LEN_BYTE_ARRAY:
                 return new DecimalReader(desc, decimal.getScale());
+              case INT64:
+                return new IntegerAsDecimalReader(desc, decimal.getScale());
+              case INT32:
+                return new LongAsDecimalReader(desc, decimal.getScale());
               default:
                 throw new UnsupportedOperationException(
                     "Unsupported base type for decimal: " + primitive.getPrimitiveTypeName());
@@ -176,10 +211,20 @@ public class ParquetAvroValueReaders {
           return new FixedReader(desc, avroSchema);
         case BINARY:
           return new BytesReader(desc);
-        case BOOLEAN:
         case INT32:
-        case INT64:
+          if (expected != null && expected.typeId() == TypeID.LONG) {
+            return new IntAsLongReader(desc);
+          } else {
+            return new UnboxedReader<>(desc);
+          }
         case FLOAT:
+          if (expected != null && expected.typeId() == TypeID.DOUBLE) {
+            return new FloatAsDoubleReader(desc);
+          } else {
+            return new UnboxedReader<>(desc);
+          }
+        case BOOLEAN:
+        case INT64:
         case DOUBLE:
           return new UnboxedReader<>(desc);
         default:
@@ -455,15 +500,15 @@ public class ParquetAvroValueReaders {
   static class RecordReader extends StructReader<Record, Record> {
     private final Schema schema;
 
-    RecordReader(GroupType type, int definitionLevel,
-                        List<ParquetValueReader<?>> readers,
-                        Schema schema) {
-      super(type, definitionLevel, readers);
+    RecordReader(List<Type> types,
+                 List<ParquetValueReader<?>> readers,
+                 Schema schema) {
+      super(types, readers);
       this.schema = schema;
     }
 
     @Override
-    protected Record newStructData(GroupType type, Record reuse) {
+    protected Record newStructData(Record reuse) {
       if (reuse != null) {
         return reuse;
       } else {

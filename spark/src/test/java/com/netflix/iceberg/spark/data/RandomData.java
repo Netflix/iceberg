@@ -231,14 +231,15 @@ public class RandomData {
     @Override
     public GenericArrayData list(Types.ListType list, Supplier<Object> elementResult) {
       int numElements = random.nextInt(20);
-      GenericArrayData result = new GenericArrayData(new Object[numElements]);
+      Object[] arr = new Object[numElements];
+      GenericArrayData result = new GenericArrayData(arr);
 
       for (int i = 0; i < numElements; i += 1) {
         // return null 5% of the time when the value is optional
         if (list.isElementOptional() && random.nextInt(20) == 1) {
-          result.update(i, null);
+          arr[i] = null;
         } else {
-          result.update(i, elementResult.get());
+          arr[i] = elementResult.get();
         }
       }
 
@@ -249,8 +250,10 @@ public class RandomData {
     public Object map(Types.MapType map, Supplier<Object> keyResult, Supplier<Object> valueResult) {
       int numEntries = random.nextInt(20);
 
-      GenericArrayData keys = new GenericArrayData(new Object[numEntries]);
-      GenericArrayData values = new GenericArrayData(new Object[numEntries]);
+      Object[] keysArr = new Object[numEntries];
+      Object[] valuesArr = new Object[numEntries];
+      GenericArrayData keys = new GenericArrayData(keysArr);
+      GenericArrayData values = new GenericArrayData(valuesArr);
       ArrayBasedMapData result = new ArrayBasedMapData(keys, values);
 
       Set<Object> keySet = Sets.newHashSet();
@@ -263,12 +266,12 @@ public class RandomData {
 
         keySet.add(key);
 
-        keys.update(i, key);
+        keysArr[i] = key;
         // return null 5% of the time when the value is optional
         if (map.isValueOptional() && random.nextInt(20) == 1) {
-          values.update(i, null);
+          valuesArr[i] = null;
         } else {
-          values.update(i, valueResult.get());
+          valuesArr[i] = valueResult.get();
         }
       }
 
