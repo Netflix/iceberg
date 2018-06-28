@@ -35,6 +35,7 @@ import org.junit.Test;
 import org.junit.rules.TemporaryFolder;
 import java.io.File;
 import java.io.IOException;
+import java.util.Iterator;
 import java.util.List;
 
 import static com.netflix.iceberg.types.Types.NestedField.optional;
@@ -72,7 +73,7 @@ public class TestParquetAvroWriter {
 
   @Test
   public void testCorrectness() throws IOException {
-    List<Record> records = RandomData.generateList(COMPLEX_SCHEMA, 250_000, 34139);
+    Iterable<Record> records = RandomData.generate(COMPLEX_SCHEMA, 250_000, 34139);
 
     File testFile = temp.newFile();
     Assert.assertTrue("Delete should succeed", testFile.delete());
@@ -90,8 +91,9 @@ public class TestParquetAvroWriter {
         fileSchema -> ParquetAvroValueReaders.buildReader(COMPLEX_SCHEMA, readSchema),
         Expressions.alwaysTrue())) {
       int i = 0;
+      Iterator<Record> iter = records.iterator();
       for (Record actual : reader) {
-        Record expected = records.get(i);
+        Record expected = iter.next();
         Assert.assertEquals("Record " + i + " should match expected", expected, actual);
         i += 1;
       }
