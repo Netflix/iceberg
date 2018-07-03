@@ -16,6 +16,8 @@
 
 package com.netflix.iceberg;
 
+import com.google.common.base.Joiner;
+import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.netflix.iceberg.exceptions.CommitFailedException;
@@ -24,6 +26,7 @@ import com.netflix.iceberg.util.Tasks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.util.Date;
 import java.util.List;
 import java.util.Set;
 import java.util.function.Consumer;
@@ -60,12 +63,14 @@ class RemoveSnapshots implements ExpireSnapshots {
 
   @Override
   public ExpireSnapshots expireSnapshotId(long snapshotId) {
+    LOG.info("Expiring snapshot with id: {}", snapshotId);
     idsToRemove.add(snapshotId);
     return this;
   }
 
   @Override
   public ExpireSnapshots expireOlderThan(long timestampMillis) {
+    LOG.info("Expiring snapshots older than: {} ({})", new Date(timestampMillis), timestampMillis);
     this.expireOlderThan = timestampMillis;
     return this;
   }
@@ -131,6 +136,7 @@ class RemoveSnapshots implements ExpireSnapshots {
       long snapshotId = snapshot.snapshotId();
       if (!currentIds.contains(snapshotId)) {
         // the snapshot was removed, find any manifests that are no longer needed
+        LOG.info("Removing snapshot: {}", snapshot);
         for (String manifest : snapshot.manifests()) {
           if (!currentManifests.contains(manifest)) {
             manifestsToDelete.add(manifest);
@@ -161,6 +167,9 @@ class RemoveSnapshots implements ExpireSnapshots {
             throw new RuntimeIOException(e, "Failed to read manifest: " + manifest);
           }
     });
+
+    LOG.warn("Manifests to delete: {}", Joiner.on(", ").join(manifestsToDelete));
+    LOG.warn("Files to delete: {}", Joiner.on(", ").join(filesToDelete));
 
     Tasks.foreach(filesToDelete)
         .noRetry().suppressFailureWhenFinished()
