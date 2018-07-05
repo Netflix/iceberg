@@ -17,12 +17,13 @@
 package com.netflix.iceberg;
 
 import com.google.common.base.Joiner;
-import com.google.common.collect.Iterables;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.netflix.iceberg.exceptions.CommitFailedException;
 import com.netflix.iceberg.exceptions.RuntimeIOException;
 import com.netflix.iceberg.util.Tasks;
+import com.netflix.iceberg.util.ThreadPools;
+import io.netty.util.internal.ConcurrentSet;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
@@ -114,6 +115,8 @@ class RemoveSnapshots implements ExpireSnapshots {
           ops.commit(base, updated);
         });
 
+    LOG.info("Committed snapshot changes; cleaning up expired manifests and data files.");
+
     // clean up the expired snapshots:
     // 1. Get a list of the snapshots that were removed
     // 2. Delete any data files that were deleted by those snapshots and are not in the table
@@ -146,9 +149,10 @@ class RemoveSnapshots implements ExpireSnapshots {
       }
     }
 
-    Set<String> filesToDelete = Sets.newHashSet();
+    Set<String> filesToDelete = new ConcurrentSet<>();
     Tasks.foreach(allManifests)
         .noRetry().suppressFailureWhenFinished()
+        .executeWith(ThreadPools.getWorkerPool())
         .onFailure((item, exc) ->
             LOG.warn("Failed to get deleted files: this may cause orphaned data files", exc)
         ).run(manifest -> {
@@ -169,7 +173,6 @@ class RemoveSnapshots implements ExpireSnapshots {
     });
 
     LOG.warn("Manifests to delete: {}", Joiner.on(", ").join(manifestsToDelete));
-    LOG.warn("Files to delete: {}", Joiner.on(", ").join(filesToDelete));
 
     Tasks.foreach(filesToDelete)
         .noRetry().suppressFailureWhenFinished()
