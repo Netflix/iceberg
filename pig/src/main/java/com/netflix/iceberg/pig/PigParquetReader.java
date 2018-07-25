@@ -22,8 +22,12 @@ import com.google.common.collect.Maps;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.parquet.ParquetValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders;
+import com.netflix.iceberg.parquet.ParquetValueReaders.PrimitiveReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedKeyValueReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.ReusableEntry;
 import com.netflix.iceberg.parquet.ParquetValueReaders.StructReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.UnboxedReader;
 import com.netflix.iceberg.parquet.TypeWithSchemaVisitor;
 import com.netflix.iceberg.types.Types;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -40,6 +44,9 @@ import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 
 import java.nio.ByteBuffer;
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
@@ -190,13 +197,15 @@ public class PigParquetReader {
           case JSON:
           case UTF8:
             return new StringReader(desc);
-          case DATE:
+          case DATE: return new DateReader(desc);
           case INT_8:
           case INT_16:
           case INT_32:
           case INT_64:
+          case TIMESTAMP_MILLIS:
+            return new UnboxedReader<>(desc);
           case TIMESTAMP_MICROS:
-            return new ParquetValueReaders.UnboxedReader<>(desc);
+            return new TimestampMicrosReader(desc);
           default:
             throw new UnsupportedOperationException("Unsupported type: " + primitive.getOriginalType());
         }
@@ -211,7 +220,7 @@ public class PigParquetReader {
         case INT64:
         case FLOAT:
         case DOUBLE:
-          return new ParquetValueReaders.UnboxedReader<>(desc);
+          return new UnboxedReader<>(desc);
         default:
           throw new UnsupportedOperationException("Unsupported type: " + primitive);
       }
@@ -244,7 +253,7 @@ public class PigParquetReader {
     }
   }
 
-  private static class StringReader extends ParquetValueReaders.PrimitiveReader<String> {
+  private static class StringReader extends PrimitiveReader<String> {
     StringReader(ColumnDescriptor desc) {
       super(desc);
     }
@@ -262,7 +271,21 @@ public class PigParquetReader {
     }
   }
 
-  private static class BytesReader extends ParquetValueReaders.PrimitiveReader<DataByteArray> {
+  private static class DateReader extends PrimitiveReader<String> {
+    private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
+
+    DateReader(ColumnDescriptor desc) {
+      super(desc);
+    }
+
+    @Override
+    public String read(String reuse) {
+      OffsetDateTime day = EPOCH.plusDays(column.nextInteger());
+      return String.format("%04d-%02d-%02d", day.getYear(), day.getMonth().getValue(), day.getDayOfMonth());
+    }
+  }
+
+  private static class BytesReader extends PrimitiveReader<DataByteArray> {
     BytesReader(ColumnDescriptor desc) {
       super(desc);
     }
@@ -274,7 +297,19 @@ public class PigParquetReader {
     }
   }
 
-  private static class MapReader<K, V> extends ParquetValueReaders.RepeatedKeyValueReader<Map<K, V>, Map<K, V>, K, V> {
+  private static class TimestampMicrosReader extends UnboxedReader<Long> {
+    TimestampMicrosReader(ColumnDescriptor desc) {
+      super(desc);
+    }
+
+    @Override
+    public Long read(Long ignored) {
+      return column.nextLong() / 1000;
+    }
+
+  }
+
+  private static class MapReader<K, V> extends RepeatedKeyValueReader<Map<K, V>, Map<K, V>, K, V> {
     ReusableEntry<K, V> nullEntry = new ReusableEntry<>();
 
     MapReader(int definitionLevel, int repetitionLevel,
@@ -303,7 +338,7 @@ public class PigParquetReader {
     }
   }
 
-  private static class ArrayReader<T> extends ParquetValueReaders.RepeatedReader<DataBag, DataBag, T> {
+  private static class ArrayReader<T> extends RepeatedReader<DataBag, DataBag, T> {
     private final BagFactory BF = BagFactory.getInstance();
     private final TupleFactory TF = TupleFactory.getInstance();
 
