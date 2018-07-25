@@ -78,6 +78,12 @@ public class PigParquetReader {
     }
 
     @Override
+    public ParquetValueReader<?> message(Types.StructType expected, MessageType message, List<ParquetValueReader<?>> fieldReaders) {
+      // the top level matches by ID, but the remaining IDs are missing
+      return super.struct(expected, message, fieldReaders);
+    }
+
+    @Override
     public ParquetValueReader<?> struct(Types.StructType ignored, GroupType struct, List<ParquetValueReader<?>> fieldReaders) {
       // the expected struct is ignored because nested fields are never found when the
       List<ParquetValueReader<?>> newFields = Lists.newArrayListWithExpectedSize(
