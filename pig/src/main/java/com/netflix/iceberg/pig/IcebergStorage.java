@@ -21,6 +21,7 @@ import com.google.common.collect.Maps;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.Table;
 import com.netflix.iceberg.types.Types;
+import org.apache.hadoop.fs.Path;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
 import org.slf4j.Logger;
@@ -278,6 +279,11 @@ public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredic
     if (value != null) {
       conf.set(key, value);
     }
+  }
+
+  @Override
+  public String relativeToAbsolutePath(String location, Path curDir) throws IOException {
+    return location;
   }
 
   @SuppressWarnings("unchecked")
