@@ -94,7 +94,7 @@ public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredic
   }
 
   @Override
-  public Tuple getNext() {
+  public Tuple getNext() throws IOException {
     if (!reader.nextKeyValue()) {
       return null;
     }
