@@ -32,6 +32,7 @@ import com.netflix.iceberg.parquet.TypeWithSchemaVisitor;
 import com.netflix.iceberg.types.Types;
 import org.apache.parquet.column.ColumnDescriptor;
 import org.apache.parquet.io.api.Binary;
+import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
@@ -43,6 +44,9 @@ import org.apache.pig.data.DataByteArray;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 
+import java.math.BigDecimal;
+import java.math.BigInteger;
+import java.math.MathContext;
 import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -195,17 +199,25 @@ public class PigParquetReader {
         switch (primitive.getOriginalType()) {
           case ENUM:
           case JSON:
-          case UTF8:
-            return new StringReader(desc);
+          case UTF8: return new StringReader(desc);
           case DATE: return new DateReader(desc);
           case INT_8:
           case INT_16:
           case INT_32:
           case INT_64:
-          case TIMESTAMP_MILLIS:
-            return new UnboxedReader<>(desc);
-          case TIMESTAMP_MICROS:
-            return new TimestampMicrosReader(desc);
+          case TIMESTAMP_MILLIS: return new UnboxedReader<>(desc);
+          case TIMESTAMP_MICROS: return new TimestampMicrosReader(desc);
+          case DECIMAL:
+            DecimalMetadata decimal = primitive.getDecimalMetadata();
+            switch (primitive.getPrimitiveTypeName()) {
+              case BINARY:
+              case FIXED_LEN_BYTE_ARRAY: return new BinaryDecimalReader(desc, decimal.getScale());
+              case INT32: return new IntegerDecimalReader(desc, decimal.getScale());
+              case INT64: return new LongDecimalReader(desc, decimal.getScale());
+              default:
+                throw new UnsupportedOperationException(
+                    "Unsupported base type for decimal: " + primitive.getPrimitiveTypeName());
+            }
           default:
             throw new UnsupportedOperationException("Unsupported type: " + primitive.getOriginalType());
         }
@@ -307,6 +319,49 @@ public class PigParquetReader {
       return column.nextLong() / 1000;
     }
 
+  }
+
+  private static class BinaryDecimalReader extends PrimitiveReader<BigDecimal> {
+    private int scale;
+
+    BinaryDecimalReader(ColumnDescriptor desc, int scale) {
+      super(desc);
+      this.scale = scale;
+    }
+
+    @Override
+    public BigDecimal read(BigDecimal reuse) {
+      byte[] bytes = column.nextBinary().getBytes();
+      return new BigDecimal(new BigInteger(bytes), scale);
+    }
+  }
+
+  private static class IntegerDecimalReader extends PrimitiveReader<BigDecimal> {
+    private final int scale;
+
+    IntegerDecimalReader(ColumnDescriptor desc, int scale) {
+      super(desc);
+      this.scale = scale;
+    }
+
+    @Override
+    public BigDecimal read(BigDecimal reuse) {
+      return BigDecimal.valueOf(column.nextInteger(), scale);
+    }
+  }
+
+  private static class LongDecimalReader extends PrimitiveReader<BigDecimal> {
+    private final int scale;
+
+    LongDecimalReader(ColumnDescriptor desc, int scale) {
+      super(desc);
+      this.scale = scale;
+    }
+
+    @Override
+    public BigDecimal read(BigDecimal reuse) {
+      return BigDecimal.valueOf(column.nextLong(), scale);
+    }
   }
 
   private static class MapReader<K, V> extends RepeatedKeyValueReader<Map<K, V>, Map<K, V>, K, V> {
