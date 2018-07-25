@@ -125,10 +125,6 @@ public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredic
   public ResourceStatistics getStatistics(String location, Job job) {
     LOG.info(format("[%s]: getStatistics() -> : %s", signature, location));
 
-    ResourceStatistics stats = new ResourceStatistics();
-    InputFormat inputFormat = getInputFormat();
-
-
     return null;
   }
 
