@@ -71,11 +71,9 @@ public class SchemaUtil {
       case LONG:      return DataType.LONG;
       case FLOAT:     return DataType.FLOAT;
       case DOUBLE:    return DataType.DOUBLE;
-      case DATE:      return DataType.DATETIME;
-      case TIME:      return DataType.DATETIME;
       case TIMESTAMP: return DataType.LONG;
+      case DATE:      return DataType.CHARARRAY;
       case STRING:    return DataType.CHARARRAY;
-      case UUID:      return DataType.CHARARRAY;
       case FIXED:     return DataType.BOOLEAN;
       case BINARY:    return DataType.BYTEARRAY;
       case DECIMAL:   return DataType.BIGDECIMAL;
@@ -83,7 +81,7 @@ public class SchemaUtil {
       case LIST:      return DataType.BAG;
       case MAP:       return DataType.MAP;
       default:
-        throw new FrontendException("Unknown primitive type:" + type);
+        throw new FrontendException("Unsupported primitive type:" + type);
     }
   }
 
