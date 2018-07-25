@@ -226,14 +226,13 @@ public class IcebergInputFormat<T> extends InputFormat<Void, T> {
     }
 
     @Override
-    public boolean nextKeyValue() {
-      if (recordIterator.hasNext()) {
+    public boolean nextKeyValue() throws IOException {
+      if (recordIterator.hasNext() || advance()) {
         currentRecord = recordIterator.next();
-      } else {
-        return false;
+        return true;
       }
-
-      return true;
+      
+      return false;
     }
 
     @Override
