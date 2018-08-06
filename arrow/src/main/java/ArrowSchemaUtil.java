@@ -14,21 +14,13 @@
  * limitations under the License.
  */
 
-rootProject.name = 'iceberg'
-include 'api'
-include 'common'
-include 'core'
-include 'orc'
-include 'parquet'
-include 'arrow'
-include 'spark'
-include 'runtime'
+import org.apache.arrow.vector.types.pojo.Schema;
 
-project(':api').name = 'iceberg-api'
-project(':common').name = 'iceberg-common'
-project(':core').name = 'iceberg-core'
-project(':orc').name = 'iceberg-orc'
-project(':parquet').name = 'iceberg-parquet'
-project(':arrow').name = 'iceberg-arrow'
-project(':spark').name = 'iceberg-spark'
-project(':runtime').name = 'iceberg-runtime'
+public class ArrowSchemaUtil {
+  private ArrowSchemaUtil() {
+  }
+
+  public static Schema convert(com.netflix.iceberg.Schema schema) {
+
+  }
+}

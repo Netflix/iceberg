@@ -62,6 +62,7 @@ subprojects {
     avroVersion = '1.8.2'
     orcVersion = '1.4.2'
     parquetVersion = '1.10.0'
+    arrowVersion = '0.9.0'
 
     jacksonVersion = '2.6.7'
 
@@ -129,6 +130,20 @@ project(':iceberg-parquet') {
     compile "org.apache.parquet:parquet-avro:$parquetVersion"
 
     compileOnly "org.apache.avro:avro:$avroVersion"
+    compileOnly('org.apache.hadoop:hadoop-client:2.7.3') {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+  }
+}
+
+project(':iceberg-arrow') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-core')
+    compile project(':iceberg-parquet')
+
+    compile "org.apache.arrow:arrow-vector:$arrowVersion"
+
     compileOnly('org.apache.hadoop:hadoop-client:2.7.3') {
       exclude group: 'org.apache.avro', module: 'avro'
     }
