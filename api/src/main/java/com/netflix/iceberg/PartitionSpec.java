@@ -268,7 +268,7 @@ public class PartitionSpec implements Serializable {
     return new Builder(schema);
   }
 
-    /**
+  /**
    * Used to create valid {@link PartitionSpec partition specs}.
    * <p>
    * Call {@link #builderFor(Schema)} to create a new builder.
