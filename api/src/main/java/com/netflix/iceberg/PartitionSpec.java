@@ -269,6 +269,24 @@ public class PartitionSpec implements Serializable {
   }
 
   /**
+   * Returns the partitions ids for identity partitions.
+   *
+   * @param spec a partition spec
+   * @return
+   */
+  public Set<Integer> identitySourceIds() {
+    Set<Integer> sourceIds = Sets.newHashSet();
+    List<PartitionField> fields = this.fields();
+    for (PartitionField field : fields) {
+      if ("identity".equals(field.transform().toString())) {
+        sourceIds.add(field.sourceId());
+      }
+    }
+
+    return sourceIds;
+  }
+
+  /**
    * Used to create valid {@link PartitionSpec partition specs}.
    * <p>
    * Call {@link #builderFor(Schema)} to create a new builder.
