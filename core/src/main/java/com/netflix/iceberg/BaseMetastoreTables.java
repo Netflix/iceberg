@@ -56,6 +56,18 @@ public abstract class BaseMetastoreTables implements Tables {
     return new BaseTable(ops, database + "." + table);
   }
 
+  public Transaction beginCreate(Schema schema, PartitionSpec spec, String database, String table) {
+    TableOperations ops = newTableOps(conf, database, table);
+    if (ops.current() != null) {
+      throw new AlreadyExistsException("Table already exists: " + database + "." + table);
+    }
+
+    String location = defaultWarehouseLocation(conf, database, table);
+    TableMetadata metadata = TableMetadata.newTableMetadata(ops, schema, spec, location);
+
+    return BaseTransaction.createTableTransaction(ops, metadata);
+  }
+
   private static String defaultWarehouseLocation(Configuration conf, String database, String table) {
     String warehouseLocation = conf.get("hive.metastore.warehouse.dir");
     Preconditions.checkNotNull(warehouseLocation,
