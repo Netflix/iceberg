@@ -71,8 +71,7 @@ class BaseTransaction implements Transaction {
 
   private void checkLastOperationCommitted(String operation) {
     Preconditions.checkState(lastBase != current,
-        "Cannot create new %s: last operation (%s) is not committed", operation,
-        updates.get(updates.size() - 1).getClass().getSimpleName());
+        "Cannot create new %s: last operation has not committed", operation);
     this.lastBase = current;
   }
 

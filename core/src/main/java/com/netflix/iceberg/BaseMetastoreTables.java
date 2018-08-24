@@ -28,7 +28,7 @@ public abstract class BaseMetastoreTables implements Tables {
     this.conf = conf;
   }
 
-  public abstract BaseMetastoreTableOperations newTableOps(Configuration conf, String database, String table);
+  protected abstract BaseMetastoreTableOperations newTableOps(Configuration conf, String database, String table);
 
   public Table load(String database, String table) {
     TableOperations ops = newTableOps(conf, database, table);
