@@ -20,16 +20,18 @@ import com.google.common.collect.Lists;
 import com.google.common.collect.Maps;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.Table;
+import com.netflix.iceberg.expressions.Expressions;
 import com.netflix.iceberg.types.Types;
 import org.apache.hadoop.fs.Path;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.apache.pig.impl.util.UDFContext;
+import org.mortbay.log.Log;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.netflix.iceberg.Tables;
 import com.netflix.iceberg.hadoop.HadoopTables;
-import com.netflix.iceberg.pig.IcebergInputFormat.IcebergRecordReader;
+import com.netflix.iceberg.pig.IcebergPigInputFormat.IcebergRecordReader;
 import org.apache.hadoop.conf.Configuration;
 import org.apache.hadoop.mapreduce.InputFormat;
 import org.apache.hadoop.mapreduce.Job;
@@ -58,14 +60,37 @@ import java.util.stream.Collectors;
 
 import static java.lang.String.format;
 import static java.util.Arrays.asList;
-import static com.netflix.iceberg.expressions.Expressions.*;
-import static org.apache.pig.Expression.OpType.*;
-import static com.netflix.iceberg.pig.IcebergInputFormat.*;
+import static com.netflix.iceberg.expressions.Expressions.and;
+import static com.netflix.iceberg.expressions.Expressions.equal;
+import static com.netflix.iceberg.expressions.Expressions.greaterThan;
+import static com.netflix.iceberg.expressions.Expressions.greaterThanOrEqual;
+import static com.netflix.iceberg.expressions.Expressions.isNull;
+import static com.netflix.iceberg.expressions.Expressions.lessThan;
+import static com.netflix.iceberg.expressions.Expressions.lessThanOrEqual;
+import static com.netflix.iceberg.expressions.Expressions.not;
+import static com.netflix.iceberg.expressions.Expressions.notEqual;
+import static com.netflix.iceberg.expressions.Expressions.or;
+import static com.netflix.iceberg.pig.IcebergPigInputFormat.ICEBERG_FILTER_EXPRESSION;
+import static com.netflix.iceberg.pig.IcebergPigInputFormat.ICEBERG_PROJECTED_FIELDS;
+import static com.netflix.iceberg.pig.IcebergPigInputFormat.ICEBERG_SCHEMA;
+import static org.apache.pig.Expression.OpType.OP_AND;
+import static org.apache.pig.Expression.OpType.OP_BETWEEN;
+import static org.apache.pig.Expression.OpType.OP_EQ;
+import static org.apache.pig.Expression.OpType.OP_GE;
+import static org.apache.pig.Expression.OpType.OP_GT;
+import static org.apache.pig.Expression.OpType.OP_IN;
+import static org.apache.pig.Expression.OpType.OP_LE;
+import static org.apache.pig.Expression.OpType.OP_LT;
+import static org.apache.pig.Expression.OpType.OP_NE;
+import static org.apache.pig.Expression.OpType.OP_NOT;
+import static org.apache.pig.Expression.OpType.OP_NULL;
+import static org.apache.pig.Expression.OpType.OP_OR;
 
 public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredicatePushdown, LoadPushDown {
   private static final Logger LOG = LoggerFactory.getLogger(IcebergStorage.class);
 
   public static final String PIG_ICEBERG_TABLES_IMPL = "pig.iceberg.tables.impl";
+  private static Tables iceberg;
   private static Map<String, Table> tables = Maps.newConcurrentMap();
   private static Map<String, String> locations = Maps.newConcurrentMap();
 
@@ -91,7 +116,7 @@ public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredic
     LOG.info(format("[%s]: getInputFormat()", signature));
     String location = locations.get(signature);
 
-    return new IcebergInputFormat(tables.get(location));
+    return new IcebergPigInputFormat(tables.get(location));
   }
 
   @Override
@@ -199,7 +224,7 @@ public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredic
         case OP_IN:
           return ((InExpression) rhs).getValues().stream()
               .map((value) -> convert(OP_EQ, (Column) lhs, (Const) value))
-              .reduce(null, (m, v) -> (m == null ? v : or(m, v)));
+              .reduce(Expressions.alwaysFalse(), (m, v) -> (or(m, v)));
         default:
           if (lhs instanceof Column && rhs instanceof Const) {
             return convert(op, (Column) lhs, (Const) rhs);
@@ -290,14 +315,17 @@ public class IcebergStorage extends LoadFunc implements LoadMetadata, LoadPredic
   }
 
   private Table load(String location, Job job) throws IOException {
-    Class<?> tablesImpl = job.getConfiguration().getClass(PIG_ICEBERG_TABLES_IMPL, HadoopTables.class);
+    if(iceberg == null) {
+      Class<?> tablesImpl = job.getConfiguration().getClass(PIG_ICEBERG_TABLES_IMPL, HadoopTables.class);
+      Log.info("Initializing iceberg tables implementation: " + tablesImpl);
+      iceberg = (Tables) ReflectionUtils.newInstance(tablesImpl, job.getConfiguration());
+    }
 
     Table result = tables.get(location);
 
     if (result == null) {
       try {
-        LOG.info(format("[%s]: Loading table from location: %s using impl: %s", signature, location, tablesImpl));
-        Tables iceberg = (Tables) ReflectionUtils.newInstance(tablesImpl, job.getConfiguration());
+        LOG.info(format("[%s]: Loading table for location: %s", signature, location));
         result = iceberg.load(location);
         tables.put(location, result);
       } catch (Exception e) {

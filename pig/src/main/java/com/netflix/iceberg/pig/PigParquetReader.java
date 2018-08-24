@@ -22,16 +22,21 @@ import com.google.common.collect.Maps;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.parquet.ParquetValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders;
+import com.netflix.iceberg.parquet.ParquetValueReaders.BinaryAsDecimalReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.FloatAsDoubleReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.IntAsLongReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.IntegerAsDecimalReader;
+import com.netflix.iceberg.parquet.ParquetValueReaders.LongAsDecimalReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.PrimitiveReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedKeyValueReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.RepeatedReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.ReusableEntry;
+import com.netflix.iceberg.parquet.ParquetValueReaders.StringReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.StructReader;
 import com.netflix.iceberg.parquet.ParquetValueReaders.UnboxedReader;
 import com.netflix.iceberg.parquet.TypeWithSchemaVisitor;
 import com.netflix.iceberg.types.Types;
 import org.apache.parquet.column.ColumnDescriptor;
-import org.apache.parquet.io.api.Binary;
 import org.apache.parquet.schema.DecimalMetadata;
 import org.apache.parquet.schema.GroupType;
 import org.apache.parquet.schema.MessageType;
@@ -44,14 +49,10 @@ import org.apache.pig.data.DataByteArray;
 import org.apache.pig.data.Tuple;
 import org.apache.pig.data.TupleFactory;
 
-import java.math.BigDecimal;
-import java.math.BigInteger;
-import java.math.MathContext;
-import java.nio.ByteBuffer;
 import java.time.Instant;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
-import java.util.Arrays;
+import java.time.temporal.ChronoUnit;
 import java.util.Iterator;
 import java.util.LinkedHashMap;
 import java.util.List;
@@ -60,7 +61,7 @@ import java.util.Map;
 import static com.netflix.iceberg.parquet.ParquetSchemaUtil.convert;
 import static com.netflix.iceberg.parquet.ParquetSchemaUtil.hasIds;
 import static com.netflix.iceberg.parquet.ParquetValueReaders.option;
-import static java.nio.charset.StandardCharsets.UTF_8;
+import static java.lang.String.format;
 
 public class PigParquetReader {
   private final ParquetValueReader reader;
@@ -113,8 +114,8 @@ public class PigParquetReader {
   }
 
   private static class ReadBuilder extends TypeWithSchemaVisitor<ParquetValueReader<?>> {
-    protected final MessageType type;
-    protected final Map<Integer, Object> partitionValues;
+    final MessageType type;
+    final Map<Integer, Object> partitionValues;
 
     ReadBuilder(MessageType type, Map<Integer, Object> partitionValues) {
       this.type = type;
@@ -204,16 +205,19 @@ public class PigParquetReader {
           case INT_8:
           case INT_16:
           case INT_32:
-          case INT_64:
-          case TIMESTAMP_MILLIS: return new UnboxedReader<>(desc);
+            if(expected.typeId() == Types.LongType.get().typeId()) {
+              return new IntAsLongReader(desc);
+            }
+          case INT_64: return new UnboxedReader<>(desc);
+          case TIMESTAMP_MILLIS: return new TimestampMillisReader(desc);
           case TIMESTAMP_MICROS: return new TimestampMicrosReader(desc);
           case DECIMAL:
             DecimalMetadata decimal = primitive.getDecimalMetadata();
             switch (primitive.getPrimitiveTypeName()) {
               case BINARY:
-              case FIXED_LEN_BYTE_ARRAY: return new BinaryDecimalReader(desc, decimal.getScale());
-              case INT32: return new IntegerDecimalReader(desc, decimal.getScale());
-              case INT64: return new LongDecimalReader(desc, decimal.getScale());
+              case FIXED_LEN_BYTE_ARRAY: return new BinaryAsDecimalReader(desc, decimal.getScale());
+              case INT32: return new IntegerAsDecimalReader(desc, decimal.getScale());
+              case INT64: return new LongAsDecimalReader(desc, decimal.getScale());
               default:
                 throw new UnsupportedOperationException(
                     "Unsupported base type for decimal: " + primitive.getPrimitiveTypeName());
@@ -231,6 +235,9 @@ public class PigParquetReader {
         case INT32:
         case INT64:
         case FLOAT:
+          if(expected.typeId() == Types.DoubleType.get().typeId()) {
+            return new FloatAsDoubleReader(desc);
+          }
         case DOUBLE:
           return new UnboxedReader<>(desc);
         default:
@@ -265,24 +272,6 @@ public class PigParquetReader {
     }
   }
 
-  private static class StringReader extends PrimitiveReader<String> {
-    StringReader(ColumnDescriptor desc) {
-      super(desc);
-    }
-
-    @Override
-    public String read(String reuse) {
-      Binary binary = column.nextBinary();
-      ByteBuffer buffer = binary.toByteBuffer();
-      if (buffer.hasArray()) {
-        return new String(
-            buffer.array(), buffer.arrayOffset() + buffer.position(), buffer.remaining(), UTF_8);
-      } else {
-        return new String(binary.getBytes(), UTF_8);
-      }
-    }
-  }
-
   private static class DateReader extends PrimitiveReader<String> {
     private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
 
@@ -293,7 +282,7 @@ public class PigParquetReader {
     @Override
     public String read(String reuse) {
       OffsetDateTime day = EPOCH.plusDays(column.nextInteger());
-      return String.format("%04d-%02d-%02d", day.getYear(), day.getMonth().getValue(), day.getDayOfMonth());
+      return format("%04d-%02d-%02d", day.getYear(), day.getMonth().getValue(), day.getDayOfMonth());
     }
   }
 
@@ -305,62 +294,31 @@ public class PigParquetReader {
     @Override
     public DataByteArray read(DataByteArray reuse) {
       byte[] bytes = column.nextBinary().getBytes();
-      return new DataByteArray(Arrays.copyOf(bytes, bytes.length));
+      return new DataByteArray(bytes);
     }
   }
 
-  private static class TimestampMicrosReader extends UnboxedReader<Long> {
+  private static class TimestampMicrosReader extends UnboxedReader<String> {
+    private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
     TimestampMicrosReader(ColumnDescriptor desc) {
       super(desc);
     }
 
     @Override
-    public Long read(Long ignored) {
-      return column.nextLong() / 1000;
-    }
-
-  }
-
-  private static class BinaryDecimalReader extends PrimitiveReader<BigDecimal> {
-    private int scale;
-
-    BinaryDecimalReader(ColumnDescriptor desc, int scale) {
-      super(desc);
-      this.scale = scale;
-    }
-
-    @Override
-    public BigDecimal read(BigDecimal reuse) {
-      byte[] bytes = column.nextBinary().getBytes();
-      return new BigDecimal(new BigInteger(bytes), scale);
+    public String read(String ignored) {
+      return ChronoUnit.MICROS.addTo(EPOCH, column.nextLong()).toString();
     }
   }
 
-  private static class IntegerDecimalReader extends PrimitiveReader<BigDecimal> {
-    private final int scale;
-
-    IntegerDecimalReader(ColumnDescriptor desc, int scale) {
+  private static class TimestampMillisReader extends UnboxedReader<String> {
+    private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
+    TimestampMillisReader(ColumnDescriptor desc) {
       super(desc);
-      this.scale = scale;
     }
 
     @Override
-    public BigDecimal read(BigDecimal reuse) {
-      return BigDecimal.valueOf(column.nextInteger(), scale);
-    }
-  }
-
-  private static class LongDecimalReader extends PrimitiveReader<BigDecimal> {
-    private final int scale;
-
-    LongDecimalReader(ColumnDescriptor desc, int scale) {
-      super(desc);
-      this.scale = scale;
-    }
-
-    @Override
-    public BigDecimal read(BigDecimal reuse) {
-      return BigDecimal.valueOf(column.nextLong(), scale);
+    public String read(String ignored) {
+      return ChronoUnit.MILLIS.addTo(EPOCH, column.nextLong()).toString();
     }
   }
 
@@ -450,7 +408,7 @@ public class PigParquetReader {
         try {
           tuple.set(e.getKey(), e.getValue());
         } catch (ExecException ex) {
-          throw new RuntimeException("", ex);
+          throw new RuntimeException("Error setting value for key" + e.getKey(), ex);
         }
       }
 
@@ -462,61 +420,7 @@ public class PigParquetReader {
       try {
         tuple.set(pos, value);
       } catch (ExecException e) {
-        throw new RuntimeException("", e);
-      }
-    }
-
-    @Override
-    protected void setNull(Tuple tuple, int pos) {
-      try {
-        tuple.set(pos, null);
-      } catch (ExecException e) {
-        throw new RuntimeException("", e);
-      }
-    }
-
-    @Override
-    protected void setBoolean(Tuple tuple, int pos, boolean value) {
-      try {
-        tuple.set(pos, value);
-      } catch (ExecException e) {
-        throw new RuntimeException("", e);
-      }
-    }
-
-    @Override
-    protected void setInteger(Tuple tuple, int pos, int value) {
-      try {
-        tuple.set(pos, value);
-      } catch (ExecException e) {
-        throw new RuntimeException("", e);
-      }
-    }
-
-    @Override
-    protected void setLong(Tuple tuple, int pos, long value) {
-      try {
-        tuple.set(pos, value);
-      } catch (ExecException e) {
-        throw new RuntimeException("", e);
-      }
-    }
-
-    @Override
-    protected void setFloat(Tuple tuple, int pos, float value) {
-      try {
-        tuple.set(pos, value);
-      } catch (ExecException e) {
-        throw new RuntimeException("", e);
-      }
-    }
-
-    @Override
-    protected void setDouble(Tuple tuple, int pos, double value) {
-      try {
-        tuple.set(pos, value);
-      } catch (ExecException e) {
-        throw new RuntimeException("", e);
+        throw new RuntimeException(format("Error setting tuple value for pos: %d, value: %s", pos, value), e);
       }
     }
   }

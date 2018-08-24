@@ -29,7 +29,10 @@ import java.io.IOException;
 import java.util.List;
 
 import static java.lang.String.format;
-import static com.netflix.iceberg.types.Types.*;
+import static com.netflix.iceberg.types.Types.ListType;
+import static com.netflix.iceberg.types.Types.MapType;
+import static com.netflix.iceberg.types.Types.NestedField;
+import static com.netflix.iceberg.types.Types.StructType;
 
 public class SchemaUtil {
 
@@ -71,10 +74,10 @@ public class SchemaUtil {
       case LONG:      return DataType.LONG;
       case FLOAT:     return DataType.FLOAT;
       case DOUBLE:    return DataType.DOUBLE;
-      case TIMESTAMP: return DataType.LONG;
+      case TIMESTAMP: return DataType.CHARARRAY;
       case DATE:      return DataType.CHARARRAY;
       case STRING:    return DataType.CHARARRAY;
-      case FIXED:     return DataType.BOOLEAN;
+      case FIXED:     return DataType.BYTEARRAY;
       case BINARY:    return DataType.BYTEARRAY;
       case DECIMAL:   return DataType.BIGDECIMAL;
       case STRUCT:    return DataType.TUPLE;
@@ -96,7 +99,7 @@ public class SchemaUtil {
 
         List<ResourceFieldSchema> fields = Lists.newArrayList();
 
-        for (NestedField f : structType.fields()) {
+        for (Types.NestedField f : structType.fields()) {
           fields.add(convert(f.type()));
         }
 

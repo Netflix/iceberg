@@ -27,8 +27,10 @@ import com.netflix.iceberg.Table;
 import com.netflix.iceberg.TableScan;
 import com.netflix.iceberg.expressions.Expression;
 import com.netflix.iceberg.hadoop.HadoopInputFile;
+import com.netflix.iceberg.io.CloseableIterable;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.parquet.Parquet;
+import com.netflix.iceberg.types.Type;
 import com.netflix.iceberg.types.TypeUtil;
 import com.netflix.iceberg.types.Types;
 import org.apache.commons.lang.SerializationUtils;
@@ -38,7 +40,7 @@ import org.apache.hadoop.mapreduce.InputSplit;
 import org.apache.hadoop.mapreduce.JobContext;
 import org.apache.hadoop.mapreduce.RecordReader;
 import org.apache.hadoop.mapreduce.TaskAttemptContext;
-import org.apache.parquet.hadoop.api.ReadSupport;
+import org.apache.pig.data.DataByteArray;
 import org.apache.pig.impl.util.ObjectSerializer;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -46,20 +48,21 @@ import org.slf4j.LoggerFactory;
 import java.io.DataInput;
 import java.io.DataOutput;
 import java.io.IOException;
+import java.nio.ByteBuffer;
 import java.util.Arrays;
 import java.util.Iterator;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
 
-import static com.netflix.iceberg.pig.SchemaUtil.*;
+import static com.netflix.iceberg.pig.SchemaUtil.project;
 
-public class IcebergInputFormat<T> extends InputFormat<Void, T> {
-  private static final Logger LOG = LoggerFactory.getLogger(IcebergInputFormat.class);
+public class IcebergPigInputFormat<T> extends InputFormat<Void, T> {
+  private static final Logger LOG = LoggerFactory.getLogger(IcebergPigInputFormat.class);
 
-  public static final String ICEBERG_SCHEMA = "iceberg.schema";
-  public static final String ICEBERG_PROJECTED_FIELDS = "iceberg.projected.fields";
-  public static final String ICEBERG_FILTER_EXPRESSION = "iceberg.filter.expression";
+  static final String ICEBERG_SCHEMA = "iceberg.schema";
+  static final String ICEBERG_PROJECTED_FIELDS = "iceberg.projected.fields";
+  static final String ICEBERG_FILTER_EXPRESSION = "iceberg.filter.expression";
 
   private static final List<String> SNAPSHOT_COLUMNS = Arrays.asList(
       "snapshot_id", "file_path", "file_ordinal", "file_format", "block_size_in_bytes",
@@ -70,13 +73,13 @@ public class IcebergInputFormat<T> extends InputFormat<Void, T> {
   private Table table;
   private List<InputSplit> splits;
 
-  public IcebergInputFormat(Table table) {
+  IcebergPigInputFormat(Table table) {
     this.table = table;
   }
 
   @Override
   @SuppressWarnings("unchecked")
-  public List<InputSplit> getSplits(JobContext context) throws IOException, InterruptedException {
+  public List<InputSplit> getSplits(JobContext context) throws IOException {
     if (splits != null) {
       LOG.info("Returning cached splits: " + splits.size());
       return splits;
@@ -101,28 +104,28 @@ public class IcebergInputFormat<T> extends InputFormat<Void, T> {
   }
 
   @Override
-  public RecordReader<Void, T> createRecordReader(InputSplit split, TaskAttemptContext context) throws IOException, InterruptedException {
+  public RecordReader<Void, T> createRecordReader(InputSplit split, TaskAttemptContext context) {
     return new IcebergRecordReader<>();
   }
 
-  public static class IcebergSplit extends InputSplit implements Writable {
+  private static class IcebergSplit extends InputSplit implements Writable {
     private CombinedScanTask task;
+
+    IcebergSplit(CombinedScanTask task) {
+      this.task = task;
+    }
 
     public IcebergSplit() {
 
     }
 
-    public IcebergSplit(CombinedScanTask task) {
-      this.task = task;
-    }
-
     @Override
-    public long getLength() throws IOException, InterruptedException {
+    public long getLength() {
       return task.files().stream().mapToLong(FileScanTask::length).sum();
     }
 
     @Override
-    public String[] getLocations() throws IOException, InterruptedException {
+    public String[] getLocations() {
       return new String[0];
     }
 
@@ -143,32 +146,35 @@ public class IcebergInputFormat<T> extends InputFormat<Void, T> {
   }
 
   public class IcebergRecordReader<T> extends RecordReader<Void, T> {
-    private IcebergSplit split;
     private TaskAttemptContext context;
-    private ReadSupport<T> readSupport;
 
     private Iterator<FileScanTask> tasks;
     private FileScanTask currentTask;
 
+    private CloseableIterable reader;
     private Iterator<T> recordIterator;
     private T currentRecord;
 
     @Override
-    public void initialize(InputSplit split, TaskAttemptContext context) throws IOException, InterruptedException {
-      this.split = (IcebergSplit) split;
+    public void initialize(InputSplit split, TaskAttemptContext context) throws IOException {
       this.context = context;
 
-      CombinedScanTask ctask = ((IcebergSplit) split).task;
-      tasks = ctask.files().iterator();
+      CombinedScanTask task = ((IcebergSplit) split).task;
+      tasks = task.files().iterator();
 
       advance();
     }
 
     @SuppressWarnings("unchecked")
     private boolean advance() throws IOException {
+      if(reader != null) {
+        reader.close();
+      }
+
       if (!tasks.hasNext()) {
         return false;
       }
+
       currentTask = tasks.next();
 
       Schema tableSchema = (Schema) ObjectSerializer.deserialize(context.getConfiguration().get(ICEBERG_SCHEMA));
@@ -199,23 +205,26 @@ public class IcebergInputFormat<T> extends InputFormat<Void, T> {
               int tupleIndex = projectedSchema.columns().indexOf(field);
               int partitionIndex = partitionSchema.columns().indexOf(field);
 
-              partitionValueMap.put(tupleIndex, file.partition().get(partitionIndex, Object.class));
+              Object partitionValue = file.partition().get(partitionIndex, Object.class);
+              partitionValueMap.put(tupleIndex, convertPartitionValue(field.type(), partitionValue));
             }
 
-            recordIterator = (Iterator<T>) Parquet.read(inputFile)
+            reader = Parquet.read(inputFile)
                 .project(readSchema)
                 .split(currentTask.start(), currentTask.length())
                 .filter(currentTask.residual())
                 .createReaderFunc(fileSchema -> PigParquetReader.buildReader(fileSchema, readSchema, partitionValueMap))
-                .build().iterator();
+                .build();
           } else {
-            recordIterator = (Iterator<T>) Parquet.read(inputFile)
+            reader = Parquet.read(inputFile)
                 .project(projectedSchema)
                 .split(currentTask.start(), currentTask.length())
                 .filter(currentTask.residual())
                 .createReaderFunc(fileSchema -> PigParquetReader.buildReader(fileSchema, projectedSchema, partitionValueMap))
-                .build().iterator();
+                .build();
           }
+
+          recordIterator = reader.iterator();
 
           break;
         default:
@@ -223,6 +232,15 @@ public class IcebergInputFormat<T> extends InputFormat<Void, T> {
       }
 
       return true;
+    }
+
+    private Object convertPartitionValue(Type type, Object value) {
+      if(type.typeId() == Types.BinaryType.get().typeId()) {
+        ByteBuffer buffer = (ByteBuffer) value;
+        return new DataByteArray(buffer.get(new byte[buffer.remaining()]).array());
+      }
+
+      return value;
     }
 
     @Override
