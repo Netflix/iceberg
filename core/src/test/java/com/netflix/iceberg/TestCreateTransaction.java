@@ -217,6 +217,45 @@ public class TestCreateTransaction extends TableTestBase {
   }
 
   @Test
+  public void testCreateDetectsUncommittedChange() throws IOException {
+    File tableDir = temp.newFolder();
+    Assert.assertTrue(tableDir.delete());
+
+    Transaction t = TestTables.beginCreate(tableDir, "uncommitted_change", SCHEMA, unpartitioned());
+
+    Assert.assertNull("Starting a create transaction should not commit metadata",
+        TestTables.readMetadata("uncommitted_change"));
+    Assert.assertNull("Should have no metadata version",
+        TestTables.metadataVersion("uncommitted_change"));
+
+    t.updateProperties().set("test-property", "test-value"); // not committed
+
+    AssertHelpers.assertThrows("Should reject commit when last operation has not committed",
+        IllegalStateException.class,
+        "Cannot create new DeleteFiles: last operation has not committed",
+        t::newDelete);
+  }
+
+  @Test
+  public void testCreateDetectsUncommittedChangeOnCommit() throws IOException {
+    File tableDir = temp.newFolder();
+    Assert.assertTrue(tableDir.delete());
+
+    Transaction t = TestTables.beginCreate(tableDir, "uncommitted_change", SCHEMA, unpartitioned());
+
+    Assert.assertNull("Starting a create transaction should not commit metadata",
+        TestTables.readMetadata("uncommitted_change"));
+    Assert.assertNull("Should have no metadata version",
+        TestTables.metadataVersion("uncommitted_change"));
+
+    t.updateProperties().set("test-property", "test-value"); // not committed
+
+    AssertHelpers.assertThrows("Should reject commit when last operation has not committed",
+        IllegalStateException.class, "Cannot commit transaction: last operation has not committed",
+        t::commitTransaction);
+  }
+
+  @Test
   public void testCreateTransactionConflict() throws IOException {
     File tableDir = temp.newFolder();
     Assert.assertTrue(tableDir.delete());

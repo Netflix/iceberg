@@ -34,7 +34,6 @@ import static com.netflix.iceberg.TableProperties.COMMIT_NUM_RETRIES_DEFAULT;
 import static com.netflix.iceberg.TableProperties.COMMIT_TOTAL_RETRY_TIME_MS;
 import static com.netflix.iceberg.TableProperties.COMMIT_TOTAL_RETRY_TIME_MS_DEFAULT;
 
-// TODO: ensure this correctly cleans up unused manifests created by SnapshotUpdates
 class BaseTransaction implements Transaction {
   static Transaction createTableTransaction(TableOperations ops, TableMetadata start) {
     Preconditions.checkArgument(ops.current() == null,
@@ -117,37 +116,34 @@ class BaseTransaction implements Transaction {
 
   @Override
   public void commitTransaction() {
+    Preconditions.checkState(lastBase != current,
+        "Cannot commit transaction: last operation has not committed");
     if (base != null) {
-      // first try to commit the update chain as-is in case it will succeed
-      boolean committed = false;
-      if (base == ops.refresh()) {
-        try {
-          ops.commit(base, current);
-          committed = true;
-        } catch (CommitFailedException e) {
-          // will retry because committed is false
-        }
+      // if there were no changes, don't try to commit
+      if (base == current) {
+        return;
       }
 
-      if (!committed) {
-        Tasks.foreach(ops)
-            .retry(base.propertyAsInt(COMMIT_NUM_RETRIES, COMMIT_NUM_RETRIES_DEFAULT))
-            .exponentialBackoff(
-                base.propertyAsInt(COMMIT_MIN_RETRY_WAIT_MS, COMMIT_MIN_RETRY_WAIT_MS_DEFAULT),
-                base.propertyAsInt(COMMIT_MAX_RETRY_WAIT_MS, COMMIT_MAX_RETRY_WAIT_MS_DEFAULT),
-                base.propertyAsInt(COMMIT_TOTAL_RETRY_TIME_MS, COMMIT_TOTAL_RETRY_TIME_MS_DEFAULT),
-                2.0 /* exponential */)
-            .onlyRetryOn(CommitFailedException.class)
-            .run(ops -> {
-              this.base = ops.refresh();
+      Tasks.foreach(ops)
+          .retry(base.propertyAsInt(COMMIT_NUM_RETRIES, COMMIT_NUM_RETRIES_DEFAULT))
+          .exponentialBackoff(
+              base.propertyAsInt(COMMIT_MIN_RETRY_WAIT_MS, COMMIT_MIN_RETRY_WAIT_MS_DEFAULT),
+              base.propertyAsInt(COMMIT_MAX_RETRY_WAIT_MS, COMMIT_MAX_RETRY_WAIT_MS_DEFAULT),
+              base.propertyAsInt(COMMIT_TOTAL_RETRY_TIME_MS, COMMIT_TOTAL_RETRY_TIME_MS_DEFAULT),
+              2.0 /* exponential */)
+          .onlyRetryOn(CommitFailedException.class)
+          .run(ops -> {
+            if (base != ops.refresh()) {
+              this.base = ops.current(); // just refreshed
               this.current = base;
               for (PendingUpdate update : updates) {
                 // re-commit each update in the chain to apply it and update current
                 update.commit();
               }
-              ops.commit(base, current);
-            });
-      }
+            }
+
+            ops.commit(base, current);
+          });
 
     } else {
       // this operation creates the table. if the commit fails, this cannot retry because another
