@@ -38,11 +38,7 @@ public class SchemaUtil {
 
   public static ResourceSchema convert(Schema icebergSchema) throws IOException {
     ResourceSchema result = new ResourceSchema();
-    List<ResourceFieldSchema> fields = Lists.newArrayList();
-    for (Types.NestedField nf : icebergSchema.columns()) {
-      fields.add(convert(nf));
-    }
-    result.setFields(fields.toArray(new ResourceSchema.ResourceFieldSchema[0]));
+    result.setFields(convertFields(icebergSchema.columns()));
     return result;
   }
 
@@ -64,7 +60,23 @@ public class SchemaUtil {
     ResourceFieldSchema result = new ResourceFieldSchema();
     result.setType(convertType(type));
 
+    if(!type.isPrimitiveType()) {
+      ResourceSchema nestedSchema = new ResourceSchema();
+      nestedSchema.setFields(convertFields(type.asNestedType().fields()));
+      result.setSchema(nestedSchema);
+    }
+
     return result;
+  }
+
+  private static ResourceFieldSchema [] convertFields(List<Types.NestedField> fields) throws IOException {
+    List<ResourceFieldSchema> result = Lists.newArrayList();
+
+    for (Types.NestedField nf : fields) {
+      result.add(convert(nf));
+    }
+
+    return result.toArray(new ResourceFieldSchema[0]);
   }
 
   private static byte convertType(Type type) throws IOException {
@@ -100,7 +112,7 @@ public class SchemaUtil {
         List<ResourceFieldSchema> fields = Lists.newArrayList();
 
         for (Types.NestedField f : structType.fields()) {
-          fields.add(convert(f.type()));
+          fields.add(convert(f));
         }
 
         result.setFields(fields.toArray(new ResourceFieldSchema[0]));
