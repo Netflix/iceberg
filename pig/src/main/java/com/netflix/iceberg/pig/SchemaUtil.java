@@ -42,6 +42,16 @@ public class SchemaUtil {
     return result;
   }
 
+  private static ResourceFieldSchema [] convertFields(List<Types.NestedField> fields) throws IOException {
+    List<ResourceFieldSchema> result = Lists.newArrayList();
+
+    for (Types.NestedField nf : fields) {
+      result.add(convert(nf));
+    }
+
+    return result.toArray(new ResourceFieldSchema[0]);
+  }
+
   private static ResourceFieldSchema convert(Types.NestedField field) throws IOException {
     ResourceFieldSchema result = new ResourceFieldSchema();
     result.setName(field.name());
@@ -50,7 +60,7 @@ public class SchemaUtil {
     result.setType(convertType(field.type()));
 
     if (!field.type().isPrimitiveType()) {
-      result.setSchema(convertComplex(field));
+      result.setSchema(convertComplex(field.type()));
     }
 
     return result;
@@ -60,23 +70,12 @@ public class SchemaUtil {
     ResourceFieldSchema result = new ResourceFieldSchema();
     result.setType(convertType(type));
 
-    if(!type.isPrimitiveType()) {
-      ResourceSchema nestedSchema = new ResourceSchema();
-      nestedSchema.setFields(convertFields(type.asNestedType().fields()));
+    if (!type.isPrimitiveType()) {
+      ResourceSchema nestedSchema = convertComplex(type);
       result.setSchema(nestedSchema);
     }
 
     return result;
-  }
-
-  private static ResourceFieldSchema [] convertFields(List<Types.NestedField> fields) throws IOException {
-    List<ResourceFieldSchema> result = Lists.newArrayList();
-
-    for (Types.NestedField nf : fields) {
-      result.add(convert(nf));
-    }
-
-    return result.toArray(new ResourceFieldSchema[0]);
   }
 
   private static byte convertType(Type type) throws IOException {
@@ -100,10 +99,8 @@ public class SchemaUtil {
     }
   }
 
-  private static ResourceSchema convertComplex(Types.NestedField field) throws IOException {
+  private static ResourceSchema convertComplex(Type type) throws IOException {
     ResourceSchema result = new ResourceSchema();
-
-    Type type = field.type();
 
     switch (type.typeId()) {
       case STRUCT:
@@ -124,7 +121,7 @@ public class SchemaUtil {
         ResourceFieldSchema [] elementFieldSchemas = new ResourceFieldSchema[]{convert(listType.elementType())};
 
         //Wrap non-struct types in tuples
-        if(listType.elementType().isStructType()) {
+        if (listType.elementType().isStructType()) {
           result.setFields(elementFieldSchemas);
         } else {
           ResourceSchema elementSchema = new ResourceSchema();
@@ -144,11 +141,11 @@ public class SchemaUtil {
         if (mapType.keyType().typeId() != Type.TypeID.STRING) {
           throw new FrontendException("Unsupported map key type: " + mapType.keyType());
         }
-        result.setFields(new ResourceFieldSchema[]{convert(mapType)});
+        result.setFields(new ResourceFieldSchema[]{convert(mapType.valueType())});
 
         return result;
       default:
-        throw new FrontendException("Unsupported complex type: " + field);
+        throw new FrontendException("Unsupported complex type: " + type);
     }
   }
 
