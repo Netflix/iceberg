@@ -121,15 +121,21 @@ public class SchemaUtil {
       case LIST:
         ListType listType = type.asListType();
 
-        ResourceSchema innerSchema = new ResourceSchema();
-        innerSchema.setFields(new ResourceFieldSchema[]{convert(listType.elementType())});
+        ResourceFieldSchema [] elementFieldSchemas = new ResourceFieldSchema[]{convert(listType.elementType())};
 
-        //Bag elements are tuples
-        ResourceFieldSchema tupleSchema = new ResourceFieldSchema();
-        tupleSchema.setType(DataType.TUPLE);
-        tupleSchema.setSchema(innerSchema);
+        //Wrap non-struct types in tuples
+        if(listType.elementType().isStructType()) {
+          result.setFields(elementFieldSchemas);
+        } else {
+          ResourceSchema elementSchema = new ResourceSchema();
+          elementSchema.setFields(elementFieldSchemas);
 
-        result.setFields(new ResourceFieldSchema[]{tupleSchema});
+          ResourceFieldSchema tupleSchema = new ResourceFieldSchema();
+          tupleSchema.setType(DataType.TUPLE);
+          tupleSchema.setSchema(elementSchema);
+
+          result.setFields(new ResourceFieldSchema[]{tupleSchema});
+        }
 
         return result;
       case MAP:
@@ -138,7 +144,7 @@ public class SchemaUtil {
         if (mapType.keyType().typeId() != Type.TypeID.STRING) {
           throw new FrontendException("Unsupported map key type: " + mapType.keyType());
         }
-        result.setFields(new ResourceFieldSchema[]{convert(mapType.valueType())});
+        result.setFields(new ResourceFieldSchema[]{convert(mapType)});
 
         return result;
       default:
