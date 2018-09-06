@@ -17,7 +17,6 @@
 package com.netflix.iceberg.pig;
 
 import com.netflix.iceberg.Schema;
-import com.netflix.iceberg.types.Types;
 import com.netflix.iceberg.types.Types.BinaryType;
 import com.netflix.iceberg.types.Types.BooleanType;
 import com.netflix.iceberg.types.Types.DecimalType;

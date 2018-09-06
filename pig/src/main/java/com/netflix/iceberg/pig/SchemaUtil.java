@@ -53,15 +53,9 @@ public class SchemaUtil {
   }
 
   private static ResourceFieldSchema convert(Types.NestedField field) throws IOException {
-    ResourceFieldSchema result = new ResourceFieldSchema();
+    ResourceFieldSchema result = convert(field.type());
     result.setName(field.name());
     result.setDescription(format("FieldId: %s", field.fieldId()));
-
-    result.setType(convertType(field.type()));
-
-    if (!field.type().isPrimitiveType()) {
-      result.setSchema(convertComplex(field.type()));
-    }
 
     return result;
   }
@@ -71,8 +65,7 @@ public class SchemaUtil {
     result.setType(convertType(type));
 
     if (!type.isPrimitiveType()) {
-      ResourceSchema nestedSchema = convertComplex(type);
-      result.setSchema(nestedSchema);
+      result.setSchema(convertComplex(type));
     }
 
     return result;
