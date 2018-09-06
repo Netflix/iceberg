@@ -113,10 +113,10 @@ public class SchemaUtil {
 
         ResourceFieldSchema [] elementFieldSchemas = new ResourceFieldSchema[]{convert(listType.elementType())};
 
-        //Wrap non-struct types in tuples
         if (listType.elementType().isStructType()) {
           result.setFields(elementFieldSchemas);
         } else {
+          //Wrap non-struct types in tuples
           ResourceSchema elementSchema = new ResourceSchema();
           elementSchema.setFields(elementFieldSchemas);
 
