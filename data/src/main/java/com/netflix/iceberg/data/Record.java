@@ -18,6 +18,7 @@ package com.netflix.iceberg.data;
 
 import com.netflix.iceberg.StructLike;
 import com.netflix.iceberg.types.Types.StructType;
+import java.util.Map;
 
 public interface Record extends StructLike {
   StructType struct();
@@ -27,4 +28,8 @@ public interface Record extends StructLike {
   void setField(String name, Object value);
 
   Object get(int pos);
+
+  Record copy();
+
+  Record copy(Map<String, Object> overwriteValues);
 }

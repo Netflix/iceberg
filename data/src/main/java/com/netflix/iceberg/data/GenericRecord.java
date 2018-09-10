@@ -22,6 +22,7 @@ import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
 import com.google.common.collect.Maps;
+import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.StructLike;
 import com.netflix.iceberg.types.Types;
 import com.netflix.iceberg.types.Types.StructType;
@@ -45,18 +46,41 @@ public class GenericRecord implements Record, StructLike {
         }
       });
 
+  public static GenericRecord create(Schema schema) {
+    return new GenericRecord(schema.asStruct());
+  }
+
   public static GenericRecord create(StructType struct) {
     return new GenericRecord(struct);
   }
 
   private final StructType struct;
+  private final int size;
   private final Object[] values;
   private final Map<String, Integer> nameToPos;
 
   private GenericRecord(StructType struct) {
     this.struct = struct;
-    this.values = new Object[struct.fields().size()];
+    this.size = struct.fields().size();
+    this.values = new Object[size];
     this.nameToPos = NAME_MAP_CACHE.getUnchecked(struct);
+  }
+
+  private GenericRecord(GenericRecord toCopy) {
+    this.struct = toCopy.struct;
+    this.size = toCopy.size;
+    this.values = Arrays.copyOf(toCopy.values, toCopy.values.length);
+    this.nameToPos = toCopy.nameToPos;
+  }
+
+  private GenericRecord(GenericRecord toCopy, Map<String, Object> overwrite) {
+    this.struct = toCopy.struct;
+    this.size = toCopy.size;
+    this.values = Arrays.copyOf(toCopy.values, toCopy.values.length);
+    this.nameToPos = toCopy.nameToPos;
+    for (Map.Entry<String, Object> entry : overwrite.entrySet()) {
+      setField(entry.getKey(), entry.getValue());
+    }
   }
 
   @Override
@@ -82,6 +106,11 @@ public class GenericRecord implements Record, StructLike {
   }
 
   @Override
+  public int size() {
+    return size;
+  }
+
+  @Override
   public Object get(int pos) {
     return values[pos];
   }
@@ -99,6 +128,16 @@ public class GenericRecord implements Record, StructLike {
   @Override
   public <T> void set(int pos, T value) {
     values[pos] = value;
+  }
+
+  @Override
+  public GenericRecord copy() {
+    return new GenericRecord(this);
+  }
+
+  @Override
+  public GenericRecord copy(Map<String, Object> overwriteValues) {
+    return new GenericRecord(this, overwriteValues);
   }
 
   @Override
