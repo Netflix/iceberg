@@ -46,6 +46,10 @@ subprojects {
   repositories {
     mavenCentral()
     mavenLocal()
+    maven {
+      name 'stagedSpark'
+      url "https://repository.apache.org/content/repositories/orgapachespark-1286/"
+    }
   }
 
   configurations {
@@ -66,7 +70,7 @@ subprojects {
     jacksonVersion = '2.6.7'
 
     scalaVersion = '2.11'
-    sparkVersion = '2.3.0'
+    sparkVersion = '2.3.2'
   }
 
   sourceCompatibility = '1.8'
