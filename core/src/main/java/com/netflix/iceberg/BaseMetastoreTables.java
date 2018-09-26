@@ -26,7 +26,7 @@ import java.util.Map;
 import static com.netflix.iceberg.TableMetadata.newTableMetadata;
 
 public abstract class BaseMetastoreTables implements Tables {
-  private final Configuration conf;
+  protected final Configuration conf;
 
   public BaseMetastoreTables(Configuration conf) {
     this.conf = conf;
