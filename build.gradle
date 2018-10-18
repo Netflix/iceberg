@@ -48,7 +48,6 @@ subprojects {
 
   repositories {
     mavenCentral()
-    maven { url "http://palantir.bintray.com/releases" }
     mavenLocal()
   }
 
