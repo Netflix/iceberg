@@ -16,17 +16,14 @@
 
 package com.netflix.iceberg.expressions;
 
-public class BoundPredicate<T> extends Predicate<T, BoundReference<T>> {
-  BoundPredicate(Operation op, BoundReference<T> ref, Literal<T> lit) {
+/**
+ * This class represents a predicate that has been bound to a known field.
+ *
+ * @param <T> The type of values in the field
+ * @param <L> The type of {@link Literal} used for comparison
+ */
+public abstract class BoundPredicate<T, L extends Literal> extends Predicate<BoundReference<T>, L> {
+  BoundPredicate(Operation op, BoundReference<T> ref, L lit) {
     super(op, ref, lit);
-  }
-
-  BoundPredicate(Operation op, BoundReference<T> ref) {
-    super(op, ref, null);
-  }
-
-  @Override
-  public Expression negate() {
-    return new BoundPredicate<>(op().negate(), ref(), literal());
   }
 }

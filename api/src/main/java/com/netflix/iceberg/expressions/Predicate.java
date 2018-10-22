@@ -16,12 +16,18 @@
 
 package com.netflix.iceberg.expressions;
 
-public abstract class Predicate<T, R extends Reference> implements Expression {
+/**
+ * This is the base class for predicates comparing a field to a literal.
+ *
+ * @param <R> The type of {@link Reference} to the field, e.g. {@link BoundReference} or {@link NamedReference}
+ * @param <L> The type of {@link Literal} being compared to, e.g. {@link ValueLiteral} or {@link CollectionLiteral}
+ */
+public abstract class Predicate<R extends Reference, L extends Literal> implements Expression {
   private final Operation op;
   private final R ref;
-  private final Literal<T> literal;
+  private final L literal;
 
-  Predicate(Operation op, R ref, Literal<T> lit) {
+  Predicate(Operation op, R ref, L lit) {
     this.op = op;
     this.ref = ref;
     this.literal = lit;
@@ -36,7 +42,7 @@ public abstract class Predicate<T, R extends Reference> implements Expression {
     return ref;
   }
 
-  public Literal<T> literal() {
+  public L literal() {
     return literal;
   }
 
@@ -59,10 +65,6 @@ public abstract class Predicate<T, R extends Reference> implements Expression {
         return String.valueOf(ref()) + " == " + literal();
       case NOT_EQ:
         return String.valueOf(ref()) + " != " + literal();
-//      case IN:
-//        break;
-//      case NOT_IN:
-//        break;
       default:
         return "Invalid predicate: operation = " + op;
     }

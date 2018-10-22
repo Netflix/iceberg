@@ -20,6 +20,7 @@ import com.netflix.iceberg.StructLike;
 import com.netflix.iceberg.expressions.ExpressionVisitors.BoundExpressionVisitor;
 import com.netflix.iceberg.types.Types;
 import java.io.Serializable;
+import java.util.Collection;
 import java.util.Comparator;
 
 /**
@@ -92,47 +93,53 @@ public class Evaluator implements Serializable {
     }
 
     @Override
-    public <T> Boolean lt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean lt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return cmp.compare(ref.get(struct), lit.value()) < 0;
     }
 
     @Override
-    public <T> Boolean ltEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean ltEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return cmp.compare(ref.get(struct), lit.value()) <= 0;
     }
 
     @Override
-    public <T> Boolean gt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return cmp.compare(ref.get(struct), lit.value()) > 0;
     }
 
     @Override
-    public <T> Boolean gtEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gtEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return cmp.compare(ref.get(struct), lit.value()) >= 0;
     }
 
     @Override
-    public <T> Boolean eq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean eq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return cmp.compare(ref.get(struct), lit.value()) == 0;
     }
 
     @Override
-    public <T> Boolean notEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       return !eq(ref, lit);
     }
 
     @Override
-    public <T> Boolean in(BoundReference<T> ref, Literal<T> lit) {
-      throw new UnsupportedOperationException("In is not supported yet");
+    public <T> Boolean in(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      if (lit.values().isEmpty()) {
+        return false;
+      }
+      
+      return lit.values()
+              .stream()
+              .anyMatch(v -> eq(ref, Literals.from(v)));
     }
 
     @Override
-    public <T> Boolean notIn(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notIn(BoundReference<T> ref, CollectionLiteral<T> lit) {
       return !in(ref, lit);
     }
   }

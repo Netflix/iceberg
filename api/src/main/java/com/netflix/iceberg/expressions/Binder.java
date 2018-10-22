@@ -101,12 +101,12 @@ public class Binder {
     }
 
     @Override
-    public <T> Expression predicate(BoundPredicate<T> pred) {
+    public <T> Expression predicate(BoundPredicate<T, ?> pred) {
       throw new IllegalStateException("Found already bound predicate: " + pred);
     }
 
     @Override
-    public <T> Expression predicate(UnboundPredicate<T> pred) {
+    public <T> Expression predicate(UnboundPredicate<T, ?> pred) {
       return pred.bind(struct);
     }
   }
@@ -140,7 +140,7 @@ public class Binder {
     }
 
     @Override
-    public <T> Set<Integer> predicate(BoundPredicate<T> pred) {
+    public <T> Set<Integer> predicate(BoundPredicate<T, ?> pred) {
       references.add(pred.ref().fieldId());
       return references;
     }

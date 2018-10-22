@@ -114,44 +114,44 @@ public class ResidualEvaluator implements Serializable {
     }
 
     @Override
-    public <T> Expression lt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Expression lt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return (cmp.compare(ref.get(struct), lit.value()) < 0) ? alwaysTrue() : alwaysFalse();
     }
 
     @Override
-    public <T> Expression ltEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Expression ltEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return (cmp.compare(ref.get(struct), lit.value()) <= 0) ? alwaysTrue() : alwaysFalse();
     }
 
     @Override
-    public <T> Expression gt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Expression gt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return (cmp.compare(ref.get(struct), lit.value()) > 0) ? alwaysTrue() : alwaysFalse();
     }
 
     @Override
-    public <T> Expression gtEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Expression gtEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return (cmp.compare(ref.get(struct), lit.value()) >= 0) ? alwaysTrue() : alwaysFalse();
     }
 
     @Override
-    public <T> Expression eq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Expression eq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return (cmp.compare(ref.get(struct), lit.value()) == 0) ? alwaysTrue() : alwaysFalse();
     }
 
     @Override
-    public <T> Expression notEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Expression notEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return (cmp.compare(ref.get(struct), lit.value()) != 0) ? alwaysTrue() : alwaysFalse();
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Expression predicate(BoundPredicate<T> pred) {
+    public <T> Expression predicate(BoundPredicate<T, ?> pred) {
       // Get the strict projection of this predicate in partition data, then use it to determine
       // whether to return the original predicate. The strict projection returns true iff the
       // original predicate would have returned true, so the predicate can be eliminated if the
@@ -163,14 +163,14 @@ public class ResidualEvaluator implements Serializable {
         return pred; // not associated inclusive a partition field, can't be evaluated
       }
 
-      UnboundPredicate<?> strictProjection = ((Transform<T, ?>) part.transform())
+      UnboundPredicate<?, ?> strictProjection = ((Transform<T, ?>) part.transform())
           .projectStrict(part.name(), pred);
 
       if (strictProjection != null) {
         Expression bound = strictProjection.bind(spec.partitionType());
         if (bound instanceof BoundPredicate) {
           // the predicate methods will evaluate and return alwaysTrue or alwaysFalse
-          return super.predicate((BoundPredicate<?>) bound);
+          return super.predicate((BoundPredicate<?, ?>) bound);
         }
         return bound; // use the non-predicate residual (e.g. alwaysTrue)
       }
@@ -180,11 +180,11 @@ public class ResidualEvaluator implements Serializable {
     }
 
     @Override
-    public <T> Expression predicate(UnboundPredicate<T> pred) {
+    public <T> Expression predicate(UnboundPredicate<T, ?> pred) {
       Expression bound = pred.bind(spec.schema().asStruct());
 
       if (bound instanceof BoundPredicate) {
-        Expression boundResidual = predicate((BoundPredicate<?>) bound);
+        Expression boundResidual = predicate((BoundPredicate<?, ?>) bound);
         if (boundResidual instanceof Predicate) {
           return pred; // replace inclusive original unbound predicate
         }

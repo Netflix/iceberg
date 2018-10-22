@@ -131,11 +131,11 @@ public class Projections {
     }
 
     @Override
-    public <T> Expression predicate(UnboundPredicate<T> pred) {
+    public <T> Expression predicate(UnboundPredicate<T, ?> pred) {
       Expression bound = pred.bind(spec.schema().asStruct());
 
       if (bound instanceof BoundPredicate) {
-        return predicate((BoundPredicate<?>) bound);
+        return predicate((BoundPredicate<?, ?>) bound);
       }
 
       return bound;
@@ -149,14 +149,14 @@ public class Projections {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Expression predicate(BoundPredicate<T> pred) {
+    public <T> Expression predicate(BoundPredicate<T, ?> pred) {
       PartitionField part = spec.getFieldBySourceId(pred.ref().fieldId());
       if (part == null) {
         // the predicate has no partition column
         return alwaysTrue();
       }
 
-      UnboundPredicate<?> result = ((Transform<T, ?>) part.transform()).project(part.name(), pred);
+      UnboundPredicate<?, ?> result = ((Transform<T, ?>) part.transform()).project(part.name(), pred);
 
       if (result != null) {
         return result;
@@ -174,14 +174,14 @@ public class Projections {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Expression predicate(BoundPredicate<T> pred) {
+    public <T> Expression predicate(BoundPredicate<T, ?> pred) {
       PartitionField part = spec.getFieldBySourceId(pred.ref().fieldId());
       if (part == null) {
         // the predicate has no partition column
         return alwaysFalse();
       }
 
-      UnboundPredicate<?> result = ((Transform<T, ?>) part.transform())
+      UnboundPredicate<?, ?> result = ((Transform<T, ?>) part.transform())
           .projectStrict(part.name(), pred);
 
       if (result != null) {

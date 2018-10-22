@@ -24,6 +24,7 @@ import com.netflix.iceberg.types.Conversions;
 import com.netflix.iceberg.types.Types;
 import com.netflix.iceberg.types.Types.StructType;
 import java.nio.ByteBuffer;
+import java.util.Collection;
 import java.util.Map;
 
 import static com.netflix.iceberg.expressions.Expressions.rewriteNot;
@@ -148,7 +149,7 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean lt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean lt(BoundReference<T> ref, ValueLiteral<T> lit) {
       // Rows must match when: <----------Min----Max---X------->
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
@@ -167,7 +168,7 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean ltEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean ltEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       // Rows must match when: <----------Min----Max---X------->
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
@@ -186,7 +187,7 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean gt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gt(BoundReference<T> ref, ValueLiteral<T> lit) {
       // Rows must match when: <-------X---Min----Max---------->
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
@@ -205,7 +206,7 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean gtEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gtEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       // Rows must match when: <-------X---Min----Max---------->
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
@@ -224,7 +225,7 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean eq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean eq(BoundReference<T> ref, ValueLiteral<T> lit) {
       // Rows must match when Min == X == Max
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
@@ -253,7 +254,7 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean notEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       // Rows must match when X < Min or Max < X because it is not in the range
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
@@ -281,13 +282,20 @@ public class StrictMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean in(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean in(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      // We can not guarantee that all rows must match since we do not know whether T is a discrete type
       return ROWS_MIGHT_NOT_MATCH;
     }
 
     @Override
-    public <T> Boolean notIn(BoundReference<T> ref, Literal<T> lit) {
-      return ROWS_MIGHT_NOT_MATCH;
+    public <T> Boolean notIn(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      // In similar fashion to notEq, we can guarantee that no rows match since:
+      // x not in (1, 2) <==> x != 1 and x != 2
+      boolean allMustMatch = lit.literalValues()
+              .stream()
+              .allMatch(v -> eq(ref, v) == ROWS_MUST_MATCH);
+      
+      return allMustMatch ? ROWS_MUST_MATCH : ROWS_MIGHT_NOT_MATCH;
     }
   }
 }

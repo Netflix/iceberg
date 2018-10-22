@@ -19,6 +19,10 @@ package com.netflix.iceberg.expressions;
 import com.google.common.base.Preconditions;
 import com.netflix.iceberg.expressions.Expression.Operation;
 
+import java.util.Collection;
+
+import static com.netflix.iceberg.expressions.Expression.Operation.*;
+
 /**
  * Factory methods for creating {@link Expression expressions}.
  */
@@ -64,54 +68,89 @@ public class Expressions {
     return new Not(child);
   }
 
-  public static <T> UnboundPredicate<T> isNull(String name) {
-    return new UnboundPredicate<>(Expression.Operation.IS_NULL, ref(name));
+  public static <T> UnboundUnaryPredicate<T> isNull(String name) {
+    return new UnboundUnaryPredicate<>(IS_NULL, ref(name));
   }
 
-  public static <T> UnboundPredicate<T> notNull(String name) {
-    return new UnboundPredicate<>(Expression.Operation.NOT_NULL, ref(name));
+  public static <T> UnboundUnaryPredicate<T> notNull(String name) {
+    return new UnboundUnaryPredicate<>(NOT_NULL, ref(name));
   }
 
-  public static <T> UnboundPredicate<T> lessThan(String name, T value) {
-    return new UnboundPredicate<>(Expression.Operation.LT, ref(name), value);
+  public static <T> UnboundValuePredicate<T> lessThan(String name, T value) {
+    return new UnboundValuePredicate<>(LT, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> lessThanOrEqual(String name, T value) {
-    return new UnboundPredicate<>(Expression.Operation.LT_EQ, ref(name), value);
+  public static <T> UnboundValuePredicate<T> lessThanOrEqual(String name, T value) {
+    return new UnboundValuePredicate<>(LT_EQ, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> greaterThan(String name, T value) {
-    return new UnboundPredicate<>(Expression.Operation.GT, ref(name), value);
+  public static <T> UnboundValuePredicate<T> greaterThan(String name, T value) {
+    return new UnboundValuePredicate<>(GT, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> greaterThanOrEqual(String name, T value) {
-    return new UnboundPredicate<>(Expression.Operation.GT_EQ, ref(name), value);
+  public static <T> UnboundValuePredicate<T> greaterThanOrEqual(String name, T value) {
+    return new UnboundValuePredicate<>(GT_EQ, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> equal(String name, T value) {
-    return new UnboundPredicate<>(Expression.Operation.EQ, ref(name), value);
+  public static <T> UnboundValuePredicate<T> equal(String name, T value) {
+    return new UnboundValuePredicate<>(EQ, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> notEqual(String name, T value) {
-    return new UnboundPredicate<>(Expression.Operation.NOT_EQ, ref(name), value);
+  public static <T> UnboundValuePredicate<T> notEqual(String name, T value) {
+    return new UnboundValuePredicate<>(NOT_EQ, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> predicate(Operation op, String name, T value) {
-    Preconditions.checkArgument(op != Operation.IS_NULL && op != Operation.NOT_NULL,
-        "Cannot create %s predicate inclusive a value", op);
-    return new UnboundPredicate<>(op, ref(name), value);
+  public static <T> UnboundCollectionPredicate<T> in(String name, Collection<T> values) {
+    return new UnboundCollectionPredicate<>(IN, ref(name), values);
   }
 
-  public static <T> UnboundPredicate<T> predicate(Operation op, String name, Literal<T> lit) {
-    Preconditions.checkArgument(op != Operation.IS_NULL && op != Operation.NOT_NULL,
-        "Cannot create %s predicate inclusive a value", op);
-    return new UnboundPredicate<>(op, ref(name), lit);
+  public static <T> UnboundCollectionPredicate<T> notIn(String name, Collection<T> values) {
+    return new UnboundCollectionPredicate<>(NOT_IN, ref(name), values);
   }
 
-  public static <T> UnboundPredicate<T> predicate(Operation op, String name) {
-    Preconditions.checkArgument(op == Operation.IS_NULL || op == Operation.NOT_NULL,
-        "Cannot create %s predicate without a value", op);
-    return new UnboundPredicate<>(op, ref(name));
+  public static <T> UnboundValuePredicate<T> predicate(Operation op, String name, T value) {
+    switch (op) {
+      case LT:
+        return lessThan(name, value);
+      case LT_EQ:
+        return lessThanOrEqual(name, value);
+      case GT:
+        return greaterThan(name, value);
+      case GT_EQ:
+        return greaterThanOrEqual(name, value);
+      case EQ:
+        return equal(name, value);
+      case NOT_EQ:
+        return notEqual(name, value);
+      default:
+        throw new IllegalArgumentException("Cannot create " + op + " predicate with a collection as a value");
+    }
+  }
+
+  public static <T> UnboundCollectionPredicate<T> predicate(Operation op, String name, Collection<T> values) {
+    switch (op) {
+      case IN:
+        return in(name, values);
+
+      case NOT_IN:
+        return notIn(name, values);
+
+      default:
+        throw new IllegalArgumentException("Cannot create " + op + " predicate with a collection as a value");
+    }
+  }
+
+  public static <T> UnboundUnaryPredicate<T> predicate(Operation op, String name) {
+    switch (op) {
+      case IS_NULL:
+        return isNull(name);
+
+      case NOT_NULL:
+        return notNull(name);
+
+      default:
+        throw new IllegalArgumentException("Cannot create " + op + " predicate without a value");
+    }
   }
 
   public static True alwaysTrue() {

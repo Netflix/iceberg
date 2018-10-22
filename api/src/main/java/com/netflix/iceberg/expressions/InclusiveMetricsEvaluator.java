@@ -24,6 +24,8 @@ import com.netflix.iceberg.types.Conversions;
 import com.netflix.iceberg.types.Types;
 import com.netflix.iceberg.types.Types.StructType;
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.Comparator;
 import java.util.Map;
 
 import static com.netflix.iceberg.expressions.Expressions.rewriteNot;
@@ -147,7 +149,7 @@ public class InclusiveMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean lt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean lt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -165,7 +167,7 @@ public class InclusiveMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean ltEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean ltEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -183,7 +185,7 @@ public class InclusiveMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean gt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -201,7 +203,7 @@ public class InclusiveMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean gtEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gtEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -219,7 +221,7 @@ public class InclusiveMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean eq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean eq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -246,19 +248,26 @@ public class InclusiveMetricsEvaluator {
     }
 
     @Override
-    public <T> Boolean notEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       // because the bounds are not necessarily a min or max value, this cannot be answered using
       // them. notEq(col, X) with (X, Y) doesn't guarantee that X is a value in col.
       return ROWS_MIGHT_MATCH;
     }
 
     @Override
-    public <T> Boolean in(BoundReference<T> ref, Literal<T> lit) {
-      return ROWS_MIGHT_MATCH;
+    public <T> Boolean in(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      // We need at least one value to maybe match so that we can say for certain that the IN expression might match
+      boolean atLeastOneValueMightMatch = lit.literalValues()
+              .stream()
+              .anyMatch(v -> eq(ref, v) == ROWS_MIGHT_MATCH);
+      
+      return atLeastOneValueMightMatch ? ROWS_MIGHT_MATCH : ROWS_CANNOT_MATCH;
     }
 
     @Override
-    public <T> Boolean notIn(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notIn(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      // In similar fashion to notEq, we can not guarantee that the rows cannot match since:
+      // x not in (1, 2) <==> x != 1 and x != 2
       return ROWS_MIGHT_MATCH;
     }
   }

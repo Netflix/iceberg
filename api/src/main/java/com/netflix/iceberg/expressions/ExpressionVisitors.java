@@ -16,6 +16,8 @@
 
 package com.netflix.iceberg.expressions;
 
+import java.util.Collection;
+
 /**
  * Utils for traversing {@link Expression expressions}.
  */
@@ -41,13 +43,11 @@ public class ExpressionVisitors {
       return null;
     }
 
-    public <T> R predicate(BoundPredicate<T> pred) {
+    public <T> R predicate(BoundPredicate<T, ?> pred) {
       return null;
     }
 
-    public <T> R predicate(UnboundPredicate<T> pred) {
-      return null;
-    }
+    public <T> R predicate(UnboundPredicate<T, ?> pred) { return null; }
   }
 
   public abstract static class BoundExpressionVisitor<R> extends ExpressionVisitor<R> {
@@ -59,67 +59,93 @@ public class ExpressionVisitors {
       return null;
     }
 
-    public <T> R lt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R lt(BoundReference<T> ref, ValueLiteral<T> lit) {
       return null;
     }
 
-    public <T> R ltEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R ltEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       return null;
     }
 
-    public <T> R gt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R gt(BoundReference<T> ref, ValueLiteral<T> lit) {
       return null;
     }
 
-    public <T> R gtEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R gtEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       return null;
     }
 
-    public <T> R eq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R eq(BoundReference<T> ref, ValueLiteral<T> lit) {
       return null;
     }
 
-    public <T> R notEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R notEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       return null;
     }
 
-    public <T> R in(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R in(BoundReference<T> ref, CollectionLiteral<T> lit) {
       return null;
     }
 
-    public <T> R notIn(BoundReference<T> ref, Literal<T> lit) {
+    public <T> R notIn(BoundReference<T> ref, CollectionLiteral<T> lit) {
       return null;
     }
 
-    public <T> R predicate(BoundPredicate<T> pred) {
-      switch (pred.op()) {
-        case IS_NULL:
-          return isNull(pred.ref());
-        case NOT_NULL:
-          return notNull(pred.ref());
-        case LT:
-          return lt(pred.ref(), pred.literal());
-        case LT_EQ:
-          return ltEq(pred.ref(), pred.literal());
-        case GT:
-          return gt(pred.ref(), pred.literal());
-        case GT_EQ:
-          return gtEq(pred.ref(), pred.literal());
-        case EQ:
-          return eq(pred.ref(), pred.literal());
-        case NOT_EQ:
-          return notEq(pred.ref(), pred.literal());
-        case IN:
-          return in(pred.ref(), pred.literal());
-        case NOT_IN:
-          return notIn(pred.ref(), pred.literal());
-        default:
-          throw new UnsupportedOperationException(
-              "Unknown operation for predicate: " + pred.op());
+    @Override
+    public <T> R predicate(BoundPredicate<T, ?> pred) {
+      if (pred instanceof BoundUnaryPredicate) {
+        switch (pred.op()) {
+          case IS_NULL:
+            return isNull(pred.ref());
+          case NOT_NULL:
+            return notNull(pred.ref());
+          default:
+            throw new UnsupportedOperationException("Unknown unary operation for predicate: " + pred.op());
+        }
+
+      } else if (pred instanceof BoundValuePredicate) {
+        //noinspection unchecked
+        BoundValuePredicate<T> valuePredicate = (BoundValuePredicate<T>) pred;
+       
+        switch (pred.op()) {
+          case LT:
+            return lt(valuePredicate.ref(), valuePredicate.literal());
+          case LT_EQ:
+            return ltEq(valuePredicate.ref(), valuePredicate.literal());
+          case GT:
+            return gt(valuePredicate.ref(), valuePredicate.literal());
+          case GT_EQ:
+            return gtEq(valuePredicate.ref(), valuePredicate.literal());
+          case EQ:
+            return eq(valuePredicate.ref(), valuePredicate.literal());
+          case NOT_EQ:
+            return notEq(valuePredicate.ref(), valuePredicate.literal());
+          default:
+            throw new UnsupportedOperationException(
+                "Unknown single value operation for predicate: " + valuePredicate.op());
+        }
+
+      } else if (pred instanceof BoundCollectionPredicate) {
+        //noinspection unchecked
+        BoundCollectionPredicate<Collection<T>> collectionPredicate = (BoundCollectionPredicate<Collection<T>>) pred;
+        switch (pred.op()) {
+          case IN:
+            return in(collectionPredicate.ref(), collectionPredicate.literal());
+          case NOT_IN:
+            return notIn(collectionPredicate.ref(), collectionPredicate.literal());
+          default:
+            throw new UnsupportedOperationException(
+                "Unknown collection operation for predicate: " + collectionPredicate.op());
+        }
+      } else {
+
+        throw new UnsupportedOperationException(
+            "Unknown predicate type " + pred.getClass().getName() + " for op " + pred.op());
       }
     }
 
-    public <T> R predicate(UnboundPredicate<T> pred) {
+    @Override
+    public <T> R predicate(UnboundPredicate<T, ?> pred) {
       throw new UnsupportedOperationException("Not a bound predicate: " + pred);
     }
   }
@@ -139,9 +165,9 @@ public class ExpressionVisitors {
   public static <R> R visit(Expression expr, ExpressionVisitor<R> visitor) {
     if (expr instanceof Predicate) {
       if (expr instanceof BoundPredicate) {
-        return visitor.predicate((BoundPredicate<?>) expr);
+        return visitor.predicate((BoundPredicate<?, ?>) expr);
       } else {
-        return visitor.predicate((UnboundPredicate<?>) expr);
+        return visitor.predicate((UnboundPredicate<?, ?>) expr);
       }
     } else {
       switch (expr.op()) {

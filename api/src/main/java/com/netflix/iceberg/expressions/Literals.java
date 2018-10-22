@@ -32,8 +32,11 @@ import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.temporal.ChronoUnit;
+import java.util.Collection;
 import java.util.Comparator;
+import java.util.List;
 import java.util.UUID;
+import java.util.stream.Collectors;
 
 class Literals {
   private Literals() {
@@ -50,33 +53,33 @@ class Literals {
    * @return a Literal for the given value
    */
   @SuppressWarnings("unchecked")
-  static <T> Literal<T> from(T value) {
+  static <T> ValueLiteral<T> from(T value) {
     Preconditions.checkNotNull(value, "Cannot create expression literal from null");
 
     if (value instanceof Boolean) {
-      return (Literal<T>) new Literals.BooleanLiteral((Boolean) value);
+      return (ValueLiteral<T>) new Literals.BooleanLiteral((Boolean) value);
     } else if (value instanceof Integer) {
-      return (Literal<T>) new Literals.IntegerLiteral((Integer) value);
+      return (ValueLiteral<T>) new Literals.IntegerLiteral((Integer) value);
     } else if (value instanceof Long) {
-      return (Literal<T>) new Literals.LongLiteral((Long) value);
+      return (ValueLiteral<T>) new Literals.LongLiteral((Long) value);
     } else if (value instanceof Float) {
-      return (Literal<T>) new Literals.FloatLiteral((Float) value);
+      return (ValueLiteral<T>) new Literals.FloatLiteral((Float) value);
     } else if (value instanceof Double) {
-      return (Literal<T>) new Literals.DoubleLiteral((Double) value);
+      return (ValueLiteral<T>) new Literals.DoubleLiteral((Double) value);
     } else if (value instanceof CharSequence) {
-      return (Literal<T>) new Literals.StringLiteral((CharSequence) value);
+      return (ValueLiteral<T>) new Literals.StringLiteral((CharSequence) value);
     } else if (value instanceof UUID) {
-      return (Literal<T>) new Literals.UUIDLiteral((UUID) value);
+      return (ValueLiteral<T>) new Literals.UUIDLiteral((UUID) value);
     } else if (value instanceof byte[]) {
-      return (Literal<T>) new Literals.FixedLiteral(ByteBuffer.wrap((byte[]) value));
+      return (ValueLiteral<T>) new Literals.FixedLiteral(ByteBuffer.wrap((byte[]) value));
     } else if (value instanceof ByteBuffer) {
-      return (Literal<T>) new Literals.BinaryLiteral((ByteBuffer) value);
+      return (ValueLiteral<T>) new Literals.BinaryLiteral((ByteBuffer) value);
     } else if (value instanceof BigDecimal) {
-      return (Literal<T>) new Literals.DecimalLiteral((BigDecimal) value);
+      return (ValueLiteral<T>) new Literals.DecimalLiteral((BigDecimal) value);
     }
 
     throw new IllegalArgumentException(String.format(
-        "Cannot create expression literal from %s: %s", value.getClass().getName(), value));
+        "Cannot create expression value literal from %s: %s", value.getClass().getName(), value));
   }
 
   @SuppressWarnings("unchecked")
@@ -89,7 +92,7 @@ class Literals {
     return BelowMin.INSTANCE;
   }
 
-  private abstract static class BaseLiteral<T> implements Literal<T> {
+  private abstract static class BaseLiteral<T> implements ValueLiteral<T> {
     private final T value;
 
     BaseLiteral(T value) {
@@ -123,7 +126,7 @@ class Literals {
     }
   }
 
-  static class AboveMax<T> implements Literal<T> {
+  static class AboveMax<T> implements ValueLiteral<T> {
     private static final AboveMax INSTANCE = new AboveMax();
 
     private AboveMax() {
@@ -135,7 +138,7 @@ class Literals {
     }
 
     @Override
-    public <X> Literal<X> to(Type type) {
+    public <X> ValueLiteral<X> to(Type type) {
       throw new UnsupportedOperationException("Cannot change the type of AboveMax");
     }
 
@@ -150,7 +153,7 @@ class Literals {
     }
   }
 
-  static class BelowMin<T> implements Literal<T> {
+  static class BelowMin<T> implements ValueLiteral<T> {
     private static final BelowMin INSTANCE = new BelowMin();
 
     private BelowMin() {
@@ -162,7 +165,7 @@ class Literals {
     }
 
     @Override
-    public <X> Literal<X> to(Type type) {
+    public <X> ValueLiteral<X> to(Type type) {
       throw new UnsupportedOperationException("Cannot change the type of BelowMin");
     }
 
@@ -184,9 +187,9 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       if (type.typeId() == Type.TypeID.BOOLEAN) {
-        return (Literal<T>) this;
+        return (ValueLiteral<T>) this;
       }
       return null;
     }
@@ -199,22 +202,22 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case INTEGER:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
         case LONG:
-          return (Literal<T>) new LongLiteral(value().longValue());
+          return (ValueLiteral<T>) new LongLiteral(value().longValue());
         case FLOAT:
-          return (Literal<T>) new FloatLiteral(value().floatValue());
+          return (ValueLiteral<T>) new FloatLiteral(value().floatValue());
         case DOUBLE:
-          return (Literal<T>) new DoubleLiteral(value().doubleValue());
+          return (ValueLiteral<T>) new DoubleLiteral(value().doubleValue());
         case DATE:
-          return (Literal<T>) new DateLiteral(value());
+          return (ValueLiteral<T>) new DateLiteral(value());
         case DECIMAL:
           int scale = ((Types.DecimalType) type).scale();
           // rounding mode isn't necessary, but pass one to avoid warnings
-          return (Literal<T>) new DecimalLiteral(
+          return (ValueLiteral<T>) new DecimalLiteral(
               BigDecimal.valueOf(value()).setScale(scale, RoundingMode.HALF_UP));
         default:
           return null;
@@ -229,7 +232,7 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case INTEGER:
           if ((long) Integer.MAX_VALUE < value()) {
@@ -237,21 +240,21 @@ class Literals {
           } else if ((long) Integer.MIN_VALUE > value()) {
             return belowMin();
           }
-          return (Literal<T>) new IntegerLiteral(value().intValue());
+          return (ValueLiteral<T>) new IntegerLiteral(value().intValue());
         case LONG:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
         case FLOAT:
-          return (Literal<T>) new FloatLiteral(value().floatValue());
+          return (ValueLiteral<T>) new FloatLiteral(value().floatValue());
         case DOUBLE:
-          return (Literal<T>) new DoubleLiteral(value().doubleValue());
+          return (ValueLiteral<T>) new DoubleLiteral(value().doubleValue());
         case TIME:
-          return (Literal<T>) new TimeLiteral(value());
+          return (ValueLiteral<T>) new TimeLiteral(value());
         case TIMESTAMP:
-          return (Literal<T>) new TimestampLiteral(value());
+          return (ValueLiteral<T>) new TimestampLiteral(value());
         case DECIMAL:
           int scale = ((Types.DecimalType) type).scale();
           // rounding mode isn't necessary, but pass one to avoid warnings
-          return (Literal<T>) new DecimalLiteral(
+          return (ValueLiteral<T>) new DecimalLiteral(
               BigDecimal.valueOf(value()).setScale(scale, RoundingMode.HALF_UP));
         default:
           return null;
@@ -266,15 +269,15 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case FLOAT:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
         case DOUBLE:
-          return (Literal<T>) new DoubleLiteral(value().doubleValue());
+          return (ValueLiteral<T>) new DoubleLiteral(value().doubleValue());
         case DECIMAL:
           int scale = ((Types.DecimalType) type).scale();
-          return (Literal<T>) new DecimalLiteral(
+          return (ValueLiteral<T>) new DecimalLiteral(
               BigDecimal.valueOf(value()).setScale(scale, RoundingMode.HALF_UP));
         default:
           return null;
@@ -289,7 +292,7 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case FLOAT:
           if ((double) Float.MAX_VALUE < value()) {
@@ -299,12 +302,12 @@ class Literals {
             // Float.MIN_VALUE is the smallest non-negative floating point value.
             return belowMin();
           }
-          return (Literal<T>) new FloatLiteral(value().floatValue());
+          return (ValueLiteral<T>) new FloatLiteral(value().floatValue());
         case DOUBLE:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
         case DECIMAL:
           int scale = ((Types.DecimalType) type).scale();
-          return (Literal<T>) new DecimalLiteral(
+          return (ValueLiteral<T>) new DecimalLiteral(
               BigDecimal.valueOf(value()).setScale(scale, RoundingMode.HALF_UP));
         default:
           return null;
@@ -319,9 +322,9 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       if (type.typeId() == Type.TypeID.DATE) {
-        return (Literal<T>) this;
+        return (ValueLiteral<T>) this;
       }
       return null;
     }
@@ -334,9 +337,9 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       if (type.typeId() == Type.TypeID.TIME) {
-        return (Literal<T>) this ;
+        return (ValueLiteral<T>) this ;
       }
       return null;
     }
@@ -349,12 +352,12 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case TIMESTAMP:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
         case DATE:
-          return (Literal<T>) new DateLiteral((int) ChronoUnit.DAYS.between(
+          return (ValueLiteral<T>) new DateLiteral((int) ChronoUnit.DAYS.between(
               EPOCH_DAY, EPOCH.plus(value(), ChronoUnit.MICROS).toLocalDate()));
         default:
       }
@@ -369,12 +372,12 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case DECIMAL:
           // do not change decimal scale
           if (value().scale() == ((Types.DecimalType) type).scale()) {
-            return (Literal<T>) this;
+            return (ValueLiteral<T>) this;
           }
           return null;
         default:
@@ -393,41 +396,41 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case DATE:
           int date = (int) ChronoUnit.DAYS.between(EPOCH_DAY,
               LocalDate.parse(value(), DateTimeFormatter.ISO_LOCAL_DATE));
-          return (Literal<T>) new DateLiteral(date);
+          return (ValueLiteral<T>) new DateLiteral(date);
 
         case TIME:
           long timeMicros = LocalTime.parse(value(), DateTimeFormatter.ISO_LOCAL_TIME)
               .toNanoOfDay() / 1000;
-          return (Literal<T>) new TimeLiteral(timeMicros);
+          return (ValueLiteral<T>) new TimeLiteral(timeMicros);
 
         case TIMESTAMP:
           if (((Types.TimestampType) type).shouldAdjustToUTC()) {
             long timestampMicros = ChronoUnit.MICROS.between(EPOCH,
                 OffsetDateTime.parse(value(), DateTimeFormatter.ISO_DATE_TIME));
-            return (Literal<T>) new TimestampLiteral(timestampMicros);
+            return (ValueLiteral<T>) new TimestampLiteral(timestampMicros);
           } else {
             long timestampMicros = ChronoUnit.MICROS.between(EPOCH,
                 LocalDateTime.parse(value(), DateTimeFormatter.ISO_LOCAL_DATE_TIME)
                     .atOffset(ZoneOffset.UTC));
-            return (Literal<T>) new TimestampLiteral(timestampMicros);
+            return (ValueLiteral<T>) new TimestampLiteral(timestampMicros);
           }
 
         case STRING:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
 
         case UUID:
-          return (Literal<T>) new UUIDLiteral(UUID.fromString(value().toString()));
+          return (ValueLiteral<T>) new UUIDLiteral(UUID.fromString(value().toString()));
 
         case DECIMAL:
           int scale = ((Types.DecimalType) type).scale();
           BigDecimal decimal = new BigDecimal(value().toString());
           if (scale == decimal.scale()) {
-            return (Literal<T>) new DecimalLiteral(decimal);
+            return (ValueLiteral<T>) new DecimalLiteral(decimal);
           }
           return null;
 
@@ -454,9 +457,9 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       if (type.typeId() == Type.TypeID.UUID) {
-        return (Literal<T>) this;
+        return (ValueLiteral<T>) this;
       }
       return null;
     }
@@ -472,16 +475,16 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case FIXED:
           Types.FixedType fixed = (Types.FixedType) type;
           if (value().remaining() == fixed.length()) {
-            return (Literal<T>) this;
+            return (ValueLiteral<T>) this;
           }
           return null;
         case BINARY:
-          return (Literal<T>) new BinaryLiteral(value());
+          return (ValueLiteral<T>) new BinaryLiteral(value());
         default:
           return null;
       }
@@ -507,16 +510,16 @@ class Literals {
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> Literal<T> to(Type type) {
+    public <T> ValueLiteral<T> to(Type type) {
       switch (type.typeId()) {
         case FIXED:
           Types.FixedType fixed = (Types.FixedType) type;
           if (value().remaining() == fixed.length()) {
-            return (Literal<T>) new FixedLiteral(value());
+            return (ValueLiteral<T>) new FixedLiteral(value());
           }
           return null;
         case BINARY:
-          return (Literal<T>) this;
+          return (ValueLiteral<T>) this;
         default:
           return null;
       }
@@ -529,6 +532,48 @@ class Literals {
 
     Object writeReplace() throws ObjectStreamException {
       return new SerializationProxies.BinaryLiteralProxy(value());
+    }
+  }
+  
+  static class CollectionLiteralImpl<T> implements CollectionLiteral<T> {
+    private final Collection<T> values;
+  
+    CollectionLiteralImpl(Collection<T> values) {
+      this.values = values;
+    }
+  
+    @Override
+    public Collection<T> values() {
+      return this.values;
+    }
+  
+    @Override
+    public Collection<ValueLiteral<T>> literalValues() {
+      return this.values.stream().map(Literals::from).collect(Collectors.toList());
+    }
+  
+    @Override
+    public <X> CollectionLiteral<X> to(Type type) {
+      List<X> converted = values.stream()
+              .map(Literals::from)
+              .map(l -> l.<X>to(type))
+              .map(ValueLiteral::value)
+              .collect(Collectors.toList());
+      
+      return new CollectionLiteralImpl<>(converted);
+    }
+  
+    @Override
+    public Comparator<T> comparator() {
+      return values.stream()
+              .findFirst()
+              .map(Literals::from)
+              .map(Literal::comparator)
+              .orElse((o1, o2) -> {
+                // This is not the right type to throw, but Java doesn't permit adding new types
+                throw new ClassCastException("Comparator used with an instance other than the one " +
+                        "it was created from, and the original instance was empty");
+              });
     }
   }
 }
