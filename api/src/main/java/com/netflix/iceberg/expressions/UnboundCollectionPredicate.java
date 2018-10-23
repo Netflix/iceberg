@@ -1,5 +1,6 @@
 package com.netflix.iceberg.expressions;
 
+import com.google.common.base.Joiner;
 import com.netflix.iceberg.exceptions.ValidationException;
 import com.netflix.iceberg.types.Types;
 

@@ -16,6 +16,7 @@
 
 package com.netflix.iceberg.expressions;
 
+import com.google.common.base.Joiner;
 import com.google.common.base.Preconditions;
 import com.netflix.iceberg.types.Comparators;
 import com.netflix.iceberg.types.Type;
@@ -105,7 +106,7 @@ class Literals {
     }
 
     @Override
-    public String toString() {
+    public String show() {
       return String.valueOf(value);
     }
   }
@@ -148,6 +149,11 @@ class Literals {
     }
 
     @Override
+    public String show() {
+      return "AboveMax";
+    }
+
+    @Override
     public String toString() {
       return "aboveMax";
     }
@@ -172,6 +178,11 @@ class Literals {
     @Override
     public Comparator<T> comparator() {
       throw new UnsupportedOperationException("BelowMin has no comparator");
+    }
+
+    @Override
+    public String show() {
+      return "BelowMin";
     }
 
     @Override
@@ -574,6 +585,11 @@ class Literals {
                 throw new ClassCastException("Comparator used with an instance other than the one " +
                         "it was created from, and the original instance was empty");
               });
+    }
+
+    @Override
+    public String show() {
+      return Joiner.on(", ").join(this.values());
     }
   }
 }

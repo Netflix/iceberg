@@ -29,4 +29,10 @@ public interface Literal<T> extends Serializable {
    * @return a comparator for T objects
    */
   Comparator<T> comparator();
+
+  /**
+   * Returns a representation of this literal as a {@link String}
+   * @return A {@link String} representation of this literal
+   */
+  String show();
 }

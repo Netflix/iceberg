@@ -21,8 +21,6 @@ import com.netflix.iceberg.expressions.Expression.Operation;
 
 import java.util.Collection;
 
-import static com.netflix.iceberg.expressions.Expression.Operation.*;
-
 /**
  * Factory methods for creating {@link Expression expressions}.
  */
@@ -69,43 +67,44 @@ public class Expressions {
   }
 
   public static <T> UnboundUnaryPredicate<T> isNull(String name) {
-    return new UnboundUnaryPredicate<>(IS_NULL, ref(name));
+    return new UnboundUnaryPredicate<>(Operation.IS_NULL, ref(name));
   }
 
   public static <T> UnboundUnaryPredicate<T> notNull(String name) {
-    return new UnboundUnaryPredicate<>(NOT_NULL, ref(name));
+    return new UnboundUnaryPredicate<>(Operation.NOT_NULL, ref(name));
   }
 
   public static <T> UnboundValuePredicate<T> lessThan(String name, T value) {
-    return new UnboundValuePredicate<>(LT, ref(name), value);
+    return new UnboundValuePredicate<>(Operation.LT, ref(name), value);
   }
 
   public static <T> UnboundValuePredicate<T> lessThanOrEqual(String name, T value) {
-    return new UnboundValuePredicate<>(LT_EQ, ref(name), value);
+    return new UnboundValuePredicate<>(Operation.LT_EQ, ref(name), value);
   }
 
   public static <T> UnboundValuePredicate<T> greaterThan(String name, T value) {
-    return new UnboundValuePredicate<>(GT, ref(name), value);
+    return new UnboundValuePredicate<>(Operation.GT, ref(name), value);
   }
 
   public static <T> UnboundValuePredicate<T> greaterThanOrEqual(String name, T value) {
-    return new UnboundValuePredicate<>(GT_EQ, ref(name), value);
+    return new UnboundValuePredicate<>(Operation.GT_EQ, ref(name), value);
   }
 
   public static <T> UnboundValuePredicate<T> equal(String name, T value) {
-    return new UnboundValuePredicate<>(EQ, ref(name), value);
+    return new UnboundValuePredicate<>(Operation.EQ, ref(name), value);
   }
 
   public static <T> UnboundValuePredicate<T> notEqual(String name, T value) {
-    return new UnboundValuePredicate<>(NOT_EQ, ref(name), value);
+    return new UnboundValuePredicate<>(Operation.NOT_EQ, ref(name), value);
   }
 
   public static <T> UnboundCollectionPredicate<T> in(String name, Collection<T> values) {
-    return new UnboundCollectionPredicate<>(IN, ref(name), values);
+    return new UnboundCollectionPredicate<>(Operation.IN, ref(name), values);
   }
 
+  // TODO: Start using this wherever we have a reference to in
   public static <T> UnboundCollectionPredicate<T> notIn(String name, Collection<T> values) {
-    return new UnboundCollectionPredicate<>(NOT_IN, ref(name), values);
+    return new UnboundCollectionPredicate<>(Operation.NOT_IN, ref(name), values);
   }
 
   public static <T> UnboundValuePredicate<T> predicate(Operation op, String name, T value) {

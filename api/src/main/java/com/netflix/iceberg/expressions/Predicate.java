@@ -16,6 +16,10 @@
 
 package com.netflix.iceberg.expressions;
 
+import com.google.common.base.Joiner;
+
+import java.util.Collection;
+
 /**
  * This is the base class for predicates comparing a field to a literal.
  *
@@ -48,25 +52,15 @@ public abstract class Predicate<R extends Reference, L extends Literal> implemen
 
   @Override
   public String toString() {
-    switch (op) {
-      case IS_NULL:
-        return "is_null(" + ref() + ")";
-      case NOT_NULL:
-        return "not_null(" + ref() + ")";
-      case LT:
-        return String.valueOf(ref()) + " < " + literal();
-      case LT_EQ:
-        return String.valueOf(ref()) + " <= " + literal();
-      case GT:
-        return String.valueOf(ref()) + " > " + literal();
-      case GT_EQ:
-        return String.valueOf(ref()) + " >= " + literal();
-      case EQ:
-        return String.valueOf(ref()) + " == " + literal();
-      case NOT_EQ:
-        return String.valueOf(ref()) + " != " + literal();
-      default:
-        return "Invalid predicate: operation = " + op;
+    if (literal() == null) {
+      return String.format("%s(%s)", op().toString(), ref());
+
+    } else if (literal() instanceof Collection) {
+      return String.format("%s %s (%s)", String.valueOf(ref()), op().toString(), literal().show());
+
+    } else {
+      return String.format("%s < %s", String.valueOf(ref()), literal().show());
+
     }
   }
 }

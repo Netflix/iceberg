@@ -16,8 +16,6 @@
 
 package com.netflix.iceberg.expressions;
 
-import java.util.stream.Collectors;
-
 /**
  * This class represents a predicate that has been bound to a known field and will be comparing it to a collection of
  * that field's type.
@@ -37,20 +35,6 @@ public class BoundCollectionPredicate<T> extends BoundPredicate<T, CollectionLit
   @Override
   public Expression negate() {
     return new BoundCollectionPredicate<>(op().negate(), ref(), literal());
-  }
-
-  @Override
-  public String toString() {
-    switch (op()) {
-      case IN:
-        return String.valueOf(ref()) + " in " +
-          literal().values().stream().map(v -> v.toString()).collect(Collectors.joining("(", ", ", ")"));
-      case NOT_IN:
-        return String.valueOf(ref()) + " not in " +
-          literal().values().stream().map(v -> v.toString()).collect(Collectors.joining("(", ", ", ")"));
-    }
-
-    return super.toString();
   }
   
   public UnboundCollectionPredicate<T> unbind(String newName) {

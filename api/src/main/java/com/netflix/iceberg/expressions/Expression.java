@@ -94,6 +94,44 @@ public interface Expression extends Serializable {
           throw new IllegalArgumentException("No left-right flip for operation: " + this);
       }
     }
+
+    @Override
+    public String toString() {
+      switch (this) {
+        case TRUE:
+          return "true?";
+        case FALSE:
+          return "false?";
+        case IS_NULL:
+          return "is_null";
+        case NOT_NULL:
+          return "not_null";
+        case LT:
+          return "<";
+        case LT_EQ:
+          return "<=";
+        case GT:
+          return ">";
+        case GT_EQ:
+          return ">=";
+        case EQ:
+          return "==";
+        case NOT_EQ:
+          return "!=";
+        case IN:
+          return "in";
+        case NOT_IN:
+          return "not_in";
+        case NOT:
+          return "not";
+        case AND:
+          return "and";
+        case OR:
+          return "or";
+        default:
+          return "invalid op";
+      }
+    }
   }
 
   /**

@@ -93,54 +93,31 @@ public class ExpressionVisitors {
 
     @Override
     public <T> R predicate(BoundPredicate<T, ?> pred) {
-      if (pred instanceof BoundUnaryPredicate) {
-        switch (pred.op()) {
-          case IS_NULL:
-            return isNull(pred.ref());
-          case NOT_NULL:
-            return notNull(pred.ref());
-          default:
-            throw new UnsupportedOperationException("Unknown unary operation for predicate: " + pred.op());
-        }
-
-      } else if (pred instanceof BoundValuePredicate) {
-        //noinspection unchecked
-        BoundValuePredicate<T> valuePredicate = (BoundValuePredicate<T>) pred;
-       
-        switch (pred.op()) {
-          case LT:
-            return lt(valuePredicate.ref(), valuePredicate.literal());
-          case LT_EQ:
-            return ltEq(valuePredicate.ref(), valuePredicate.literal());
-          case GT:
-            return gt(valuePredicate.ref(), valuePredicate.literal());
-          case GT_EQ:
-            return gtEq(valuePredicate.ref(), valuePredicate.literal());
-          case EQ:
-            return eq(valuePredicate.ref(), valuePredicate.literal());
-          case NOT_EQ:
-            return notEq(valuePredicate.ref(), valuePredicate.literal());
-          default:
-            throw new UnsupportedOperationException(
-                "Unknown single value operation for predicate: " + valuePredicate.op());
-        }
-
-      } else if (pred instanceof BoundCollectionPredicate) {
-        //noinspection unchecked
-        BoundCollectionPredicate<Collection<T>> collectionPredicate = (BoundCollectionPredicate<Collection<T>>) pred;
-        switch (pred.op()) {
-          case IN:
-            return in(collectionPredicate.ref(), collectionPredicate.literal());
-          case NOT_IN:
-            return notIn(collectionPredicate.ref(), collectionPredicate.literal());
-          default:
-            throw new UnsupportedOperationException(
-                "Unknown collection operation for predicate: " + collectionPredicate.op());
-        }
-      } else {
-
-        throw new UnsupportedOperationException(
-            "Unknown predicate type " + pred.getClass().getName() + " for op " + pred.op());
+      // During the binding phase of the predicate we are guaranteed that the type of the predicate matches that
+      // required for the operation. This is an unsafe downcast, but we have prior knowledge it is possible.
+      switch (pred.op()) {
+        case IS_NULL:
+          return isNull(pred.ref());
+        case NOT_NULL:
+          return notNull(pred.ref());
+        case LT:
+          return lt(pred.ref(), ((BoundValuePredicate<T>) pred).literal());
+        case LT_EQ:
+          return ltEq(pred.ref(), ((BoundValuePredicate<T>) pred).literal());
+        case GT:
+          return gt(pred.ref(), ((BoundValuePredicate<T>) pred).literal());
+        case GT_EQ:
+          return gtEq(pred.ref(), ((BoundValuePredicate<T>) pred).literal());
+        case EQ:
+          return eq(pred.ref(), ((BoundValuePredicate<T>) pred).literal());
+        case NOT_EQ:
+          return notEq(pred.ref(), ((BoundValuePredicate<T>) pred).literal());
+        case IN:
+          return in(pred.ref(), ((BoundCollectionPredicate<T>) pred).literal());
+        case NOT_IN:
+          return notIn(pred.ref(), ((BoundCollectionPredicate<T>) pred).literal());
+        default:
+          throw new UnsupportedOperationException("Unknown operation for predicate: " + pred.op());
       }
     }
 
