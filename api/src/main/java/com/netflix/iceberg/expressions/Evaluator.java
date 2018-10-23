@@ -110,6 +110,11 @@ public class Evaluator implements Serializable {
     }
 
     @Override
+    public Boolean startsWith(BoundReference<String> ref, Literal<String> lit) {
+      return ref.get(struct).startsWith(lit.value());
+    }
+
+    @Override
     public <T> Boolean gtEq(BoundReference<T> ref, Literal<T> lit) {
       Comparator<T> cmp = lit.comparator();
       return cmp.compare(ref.get(struct), lit.value()) >= 0;

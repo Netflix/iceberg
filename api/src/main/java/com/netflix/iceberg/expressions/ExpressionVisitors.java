@@ -91,6 +91,10 @@ public class ExpressionVisitors {
       return null;
     }
 
+    public R startsWith(BoundReference<String> ref, Literal<String> lit) {
+      return null;
+    }
+
     public <T> R predicate(BoundPredicate<T> pred) {
       switch (pred.op()) {
         case IS_NULL:
@@ -113,6 +117,11 @@ public class ExpressionVisitors {
           return in(pred.ref(), pred.literal());
         case NOT_IN:
           return notIn(pred.ref(), pred.literal());
+        case STARTS_WITH:
+//          due to the fact that startWith function in Expressions accepts only string types casting is a must here.
+//          in  Unbound#bind function we added a check for that
+
+          return startsWith((BoundReference<String>) pred.ref(), pred.literal().to(pred.ref().type()));
         default:
           throw new UnsupportedOperationException(
               "Unknown operation for predicate: " + pred.op());
