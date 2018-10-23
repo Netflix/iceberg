@@ -1,0 +1,24 @@
+{
+  "format-version" : 1,
+  "location" : "file://tmp/db/table",
+  "last-updated-ms" : 1540313101757,
+  "last-column-id" : 1,
+  "schema" : {
+    "type" : "struct",
+    "fields" : [ {
+      "id" : 1,
+      "name" : "b",
+      "required" : false,
+      "type" : "boolean"
+    } ]
+  },
+  "partition-spec" : [ ],
+  "properties" : { },
+  "current-snapshot-id" : 1528926152762,
+  "snapshots" : [ {
+    "snapshot-id" : 1528926152762,
+    "timestamp-ms" : 1528926153023,
+    "manifests" : [ "file://tmp/db/table/metadata/manifest.avro" ]
+  } ],
+  "snapshot-log" : [ ]
+}

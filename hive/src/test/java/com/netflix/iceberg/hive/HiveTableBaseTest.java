@@ -220,7 +220,7 @@ class HiveTableBaseTest {
   }
 
   List<String> metadataVersionFiles(String tableName) {
-    return filterByExtension(tableName, "metadata.json");
+    return filterByExtension(tableName, "metadata.json.gz");
   }
 
   List<String> manifestFiles(String tableName) {

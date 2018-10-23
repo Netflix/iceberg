@@ -98,7 +98,7 @@ class HadoopTableOperations implements TableOperations {
       return;
     }
 
-    Path tempMetadataFile = metadataPath(UUID.randomUUID().toString() + ".metadata.json");
+    Path tempMetadataFile = metadataPath(UUID.randomUUID().toString() + ".metadata.json.gz");
     TableMetadataParser.write(metadata, HadoopOutputFile.fromPath(tempMetadataFile, conf));
 
     int nextVersion = (version != null ? version : 0) + 1;
@@ -159,7 +159,7 @@ class HadoopTableOperations implements TableOperations {
   }
 
   private Path metadataFile(int version) {
-    return metadataPath("v" + version + ".metadata.json");
+    return metadataPath("v" + version + ".metadata.json.gz");
   }
 
   private Path metadataPath(String filename) {

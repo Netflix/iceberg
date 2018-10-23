@@ -137,7 +137,7 @@ public abstract class BaseMetastoreTableOperations implements TableOperations {
   }
 
   private static String newTableMetadataFilename(String baseLocation, int newVersion) {
-    return String.format("%s/%s/%05d-%s.metadata.json",
+    return String.format("%s/%s/%05d-%s.metadata.json.gz",
         baseLocation, METADATA_FOLDER_NAME, newVersion, UUID.randomUUID());
   }
 
