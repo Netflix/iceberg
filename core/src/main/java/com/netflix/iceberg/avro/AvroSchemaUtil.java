@@ -26,6 +26,7 @@ import org.apache.avro.JsonProperties;
 import org.apache.avro.LogicalType;
 import org.apache.avro.LogicalTypes;
 import org.apache.avro.Schema;
+
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -70,6 +71,16 @@ public class AvroSchemaUtil {
     return AvroSchemaVisitor.visit(schema, new SchemaToType(schema));
   }
 
+  /**
+   * Converts an Avro schema to an iceberg schema, assigning ids serially
+   *
+   * @param avroSchema Avro schema
+   * @return An iceberg schema with sequential ids
+   */
+  public static com.netflix.iceberg.Schema convertToIcebergSchema(Schema avroSchema) {
+    return AvroNamedSchemaVisitor.visit(avroSchema, avroSchema.getName(), new AvroToIcebergSchemaVisitor(avroSchema));
+  }
+
   public static Map<Type, Schema> convertTypes(Types.StructType type, String name) {
     TypeToSchema converter = new TypeToSchema(ImmutableMap.of(type, name));
     TypeUtil.visit(type, converter);
@@ -87,7 +98,7 @@ public class AvroSchemaUtil {
 
   public static boolean isTimestamptz(Schema schema) {
     LogicalType logicalType = schema.getLogicalType();
-    if (logicalType != null && logicalType instanceof LogicalTypes.TimestampMicros) {
+    if (logicalType instanceof LogicalTypes.TimestampMicros) {
       // timestamptz is adjusted to UTC
       Object value = schema.getObjectProp(ADJUST_TO_UTC_PROP);
       if (value instanceof Boolean) {
@@ -101,14 +112,10 @@ public class AvroSchemaUtil {
   }
 
   static boolean isOptionSchema(Schema schema) {
-    if (schema.getType() == UNION && schema.getTypes().size() == 2) {
-      if (schema.getTypes().get(0).getType() == Schema.Type.NULL) {
-        return true;
-      } else if (schema.getTypes().get(1).getType() == Schema.Type.NULL) {
-        return true;
-      }
-    }
-    return false;
+    if (schema.getType() != UNION || schema.getTypes().size() != 2) return false;
+
+    if (schema.getTypes().get(0).getType() == Schema.Type.NULL) return true;
+    else return schema.getTypes().get(1).getType() == Schema.Type.NULL;
   }
 
   static Schema toOption(Schema schema) {
@@ -155,7 +162,7 @@ public class AvroSchemaUtil {
     keyField.addProp(FIELD_ID_PROP, keyId);
 
     Schema.Field valueField = new Schema.Field("value", valueSchema, null,
-        isOptionSchema(valueSchema) ? JsonProperties.NULL_VALUE: null);
+        isOptionSchema(valueSchema) ? JsonProperties.NULL_VALUE : null);
     valueField.addProp(FIELD_ID_PROP, valueId);
 
     return LogicalMap.get().addToSchema(Schema.createArray(Schema.createRecord(
@@ -163,8 +170,8 @@ public class AvroSchemaUtil {
   }
 
   static Schema createProjectionMap(String recordName,
-                          int keyId, String keyName, Schema keySchema,
-                          int valueId, String valueName, Schema valueSchema) {
+                                    int keyId, String keyName, Schema keySchema,
+                                    int valueId, String valueName, Schema valueSchema) {
     String keyValueName = "k" + keyId + "_v" + valueId;
 
     Schema.Field keyField = new Schema.Field("key", keySchema, null, null);
@@ -174,7 +181,7 @@ public class AvroSchemaUtil {
     keyField.addProp(FIELD_ID_PROP, keyId);
 
     Schema.Field valueField = new Schema.Field("value", valueSchema, null,
-        isOptionSchema(valueSchema) ? JsonProperties.NULL_VALUE: null);
+        isOptionSchema(valueSchema) ? JsonProperties.NULL_VALUE : null);
     valueField.addProp(FIELD_ID_PROP, valueId);
     if (!"value".equals(valueName)) {
       valueField.addAlias(valueName);

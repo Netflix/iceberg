@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.util.List;
 import java.util.Map;
 
+@SuppressWarnings("Duplicates")
 public abstract class TestReadProjection {
   protected abstract Record writeAndRead(String desc,
                                          Schema writeSchema,
