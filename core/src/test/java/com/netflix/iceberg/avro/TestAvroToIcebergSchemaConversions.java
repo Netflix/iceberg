@@ -46,31 +46,10 @@ public class TestAvroToIcebergSchemaConversions {
         .optionalBytes("myBytes")
         .endRecord();
 
-    Schema endUnion = SchemaBuilder.array().items().unionOf().booleanBuilder().endBoolean().endUnion();
-
     com.netflix.iceberg.Schema icebergSchema = AvroNamedSchemaVisitor.visit(schema, schema.getName(), new AvroToIcebergSchemaVisitor(schema));
     Types.StructType icebergStruct = icebergSchema.asStruct();
 
     Types.NestedField myBytes = icebergStruct.field("myBytes");
-    Assert.assertEquals(myBytes.fieldId(), 3);
-  }
-
-  @Test
-  public void fooTest() {
-    Schema schema = SchemaBuilder.record("foo")
-        .fields()
-        .name("bar")
-        .type()
-        .record("baz")
-        .fields()
-        .optionalDouble("number")
-        .requiredLong("otherNumber")
-        .endRecord()
-        .noDefault()
-        .optionalBytes("myBytes")
-        .endRecord();
-
-    com.netflix.iceberg.Schema schema1 = new com.netflix.iceberg.Schema(AvroSchemaUtil.convert(schema).asStructType().fields());
-    System.out.println(schema1);
+    Assert.assertEquals(myBytes.fieldId(), 1);
   }
 }
