@@ -3,6 +3,8 @@ package com.netflix.iceberg.expressions;
 import com.netflix.iceberg.exceptions.ValidationException;
 import com.netflix.iceberg.types.Types;
 
+import java.util.function.Function;
+
 import static com.netflix.iceberg.expressions.Expression.Operation.*;
 
 /**
@@ -67,4 +69,9 @@ public class UnboundValuePredicate<T> extends UnboundPredicate<T, ValueLiteral<T
 
     return new BoundValuePredicate<>(op(), new BoundReference<>(struct, field.fieldId()), lit);
   }
+
+  public <S> UnboundValuePredicate<S> transform(Function<T, S> f) {
+    return new UnboundValuePredicate<>(op(), ref(), f.apply(literal().value()));
+  }
+
 }

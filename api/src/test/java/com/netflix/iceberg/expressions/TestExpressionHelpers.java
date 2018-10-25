@@ -29,7 +29,7 @@ import static com.netflix.iceberg.expressions.Expressions.not;
 import static com.netflix.iceberg.expressions.Expressions.or;
 
 public class TestExpressionHelpers {
-  private final UnboundPredicate<?> pred = lessThan("x", 7);
+  private final UnboundValuePredicate<Integer> pred = lessThan("x", 7);
 
   @Test
   public void testSimplifyOr() {

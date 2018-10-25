@@ -17,6 +17,7 @@
 package com.netflix.iceberg.types;
 
 import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.TestLiterals;
 import org.junit.Assert;
 import org.junit.Test;
 import java.util.Comparator;
@@ -31,7 +32,7 @@ import java.util.Comparator;
 public class TestComparableComparator {
   @Test
   public void testNaturalOrder() {
-    Comparator<Long> cmp = Literal.of(34L).comparator();
+    Comparator<Long> cmp = TestLiterals.from(34L).comparator();
     Assert.assertTrue("Should use the natural order for non-null values",
         cmp.compare(33L, 34L) < 0);
     Assert.assertTrue("Should use signed ordering",
@@ -40,7 +41,7 @@ public class TestComparableComparator {
 
   @Test
   public void testNullHandling() {
-    Comparator<Long> cmp = Literal.of(34L).comparator();
+    Comparator<Long> cmp = TestLiterals.from(34L).comparator();
     Assert.assertTrue("null comes before non-null", cmp.compare(null, 34L) < 0);
     Assert.assertTrue("null comes before non-null", cmp.compare(34L, null) > 0);
     Assert.assertEquals("null equals null", 0, cmp.compare(null, null));

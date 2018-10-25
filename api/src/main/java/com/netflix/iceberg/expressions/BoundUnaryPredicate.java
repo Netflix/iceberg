@@ -16,7 +16,11 @@ public class BoundUnaryPredicate<T> extends BoundPredicate<T, Literal<T>> {
     return new BoundUnaryPredicate<>(op().negate(), ref());
   }
 
-  public UnboundUnaryPredicate<T> unbind(String newName) {
+  public UnboundUnaryPredicate<T> typedUnbind(String newName) {
+    return this.unbind(newName);
+  }
+
+  public <S> UnboundUnaryPredicate<S> unbind(String newName) {
     return new UnboundUnaryPredicate<>(op(), new NamedReference(newName));
   }
 }

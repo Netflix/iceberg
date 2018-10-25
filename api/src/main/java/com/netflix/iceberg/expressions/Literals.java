@@ -46,6 +46,14 @@ class Literals {
   private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
   private static final LocalDate EPOCH_DAY = EPOCH.toLocalDate();
 
+  static <T extends CharSequence> ValueLiteral<CharSequence> from(T value) {
+    return new StringLiteral(value);
+  }
+
+  static ValueLiteral<ByteBuffer> from(byte[] value) {
+    return new FixedLiteral(ByteBuffer.wrap(value));
+  }
+
   /**
    * Create a {@link Literal} from an Object.
    *

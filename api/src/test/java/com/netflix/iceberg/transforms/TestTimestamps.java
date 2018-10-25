@@ -16,7 +16,8 @@
 
 package com.netflix.iceberg.transforms;
 
-import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.Test;
@@ -25,7 +26,7 @@ public class TestTimestamps {
   @Test
   public void testTimestampWithoutZoneToHumanString() {
     Types.TimestampType type = Types.TimestampType.withoutZone();
-    Literal<Integer> date = Literal.of("2017-12-01T10:12:55.038194").to(type);
+    ValueLiteral<Integer> date = TestLiterals.from("2017-12-01T10:12:55.038194").to(type);
 
     Transform<Integer, Integer> year = Transforms.year(type);
     Assert.assertEquals("Should produce the correct Human string",
@@ -47,7 +48,7 @@ public class TestTimestamps {
   @Test
   public void testTimestampWithZoneToHumanString() {
     Types.TimestampType type = Types.TimestampType.withZone();
-    Literal<Integer> date = Literal.of("2017-12-01T10:12:55.038194-08:00").to(type);
+    ValueLiteral<Integer> date = TestLiterals.from("2017-12-01T10:12:55.038194-08:00").to(type);
 
     Transform<Integer, Integer> year = Transforms.year(type);
     Assert.assertEquals("Should produce the correct Human string",

@@ -20,6 +20,8 @@ import com.google.common.base.Charsets;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.types.Types;
 import org.apache.avro.util.Utf8;
 import org.junit.Assert;
@@ -75,23 +77,23 @@ public class TestBucketing {
         -500754589,
         Bucket.<BigDecimal>get(Types.DecimalType.of(9,2), 100).hash(new BigDecimal("14.20")));
 
-    Literal<Integer> date = Literal.of("2017-11-16").to(Types.DateType.get());
+    ValueLiteral<Integer> date = TestLiterals.from("2017-11-16").to(Types.DateType.get());
     Assert.assertEquals("Spec example: hash(2017-11-16) = -653330422",
         -653330422,
         Bucket.<Integer>get(Types.DateType.get(), 100).hash(date.value()));
 
-    Literal<Long> timeValue = Literal.of("22:31:08").to(Types.TimeType.get());
+    ValueLiteral<Long> timeValue = TestLiterals.from("22:31:08").to(Types.TimeType.get());
     Assert.assertEquals("Spec example: hash(22:31:08) = -662762989",
         -662762989,
         Bucket.<Long>get(Types.TimeType.get(), 100).hash(timeValue.value()));
 
-    Literal<Long> timestampVal = Literal.of("2017-11-16T22:31:08")
+    ValueLiteral<Long> timestampVal = TestLiterals.from("2017-11-16T22:31:08")
         .to(Types.TimestampType.withoutZone());
     Assert.assertEquals("Spec example: hash(2017-11-16T22:31:08) = -2047944441",
         -2047944441,
         Bucket.<Long>get(Types.TimestampType.withoutZone(), 100).hash(timestampVal.value()));
 
-    Literal<Long> timestamptzVal = Literal.of("2017-11-16T14:31:08-08:00")
+    ValueLiteral<Long> timestamptzVal = TestLiterals.from("2017-11-16T14:31:08-08:00")
         .to(Types.TimestampType.withZone());
     Assert.assertEquals("Spec example: hash(2017-11-16T14:31:08-08:00) = -2047944441",
         -2047944441,
@@ -102,7 +104,7 @@ public class TestBucketing {
     Assert.assertEquals("Spec example: hash(\"iceberg\") = 1210000089",
         1210000089, Bucket.<Utf8>get(Types.StringType.get(), 100).hash(new Utf8("iceberg")));
 
-    Literal<UUID> uuid = Literal.of("f79c3e09-677c-4bbd-a479-3f349cb785e7")
+    ValueLiteral<UUID> uuid = TestLiterals.from("f79c3e09-677c-4bbd-a479-3f349cb785e7")
         .to(Types.UUIDType.get());
     Assert.assertEquals("Spec example: hash(f79c3e09-677c-4bbd-a479-3f349cb785e7) = 1488055340",
         1488055340, Bucket.<UUID>get(Types.UUIDType.get(), 100).hash(uuid.value()));

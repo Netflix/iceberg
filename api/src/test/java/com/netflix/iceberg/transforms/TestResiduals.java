@@ -20,13 +20,13 @@ import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.TestHelpers.Row;
 import com.netflix.iceberg.expressions.Expression;
 import com.netflix.iceberg.expressions.ResidualEvaluator;
-import com.netflix.iceberg.expressions.UnboundPredicate;
 import com.netflix.iceberg.PartitionSpec;
+import com.netflix.iceberg.expressions.UnboundValuePredicate;
 import com.netflix.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.Test;
 
-import static com.netflix.iceberg.TestHelpers.assertAndUnwrapUnbound;
+import static com.netflix.iceberg.TestHelpers.assertAndUnwrapUnboundValue;
 import static com.netflix.iceberg.expressions.Expression.Operation.GT;
 import static com.netflix.iceberg.expressions.Expression.Operation.LT;
 import static com.netflix.iceberg.expressions.Expressions.alwaysFalse;
@@ -57,14 +57,14 @@ public class TestResiduals {
 
     // equal to the upper date bound
     Expression residual = resEval.residualFor(Row.of(20170815));
-    UnboundPredicate<?> unbound = assertAndUnwrapUnbound(residual);
+    UnboundValuePredicate<?> unbound = assertAndUnwrapUnboundValue(residual);
     Assert.assertEquals("Residual should be hour < 12", LT, unbound.op());
     Assert.assertEquals("Residual should be hour < 12", "hour", unbound.ref().name());
     Assert.assertEquals("Residual should be hour < 12", 12, unbound.literal().value());
 
     // equal to the lower date bound
     residual = resEval.residualFor(Row.of(20170801));
-    unbound = assertAndUnwrapUnbound(residual);
+    unbound = assertAndUnwrapUnboundValue(residual);
     Assert.assertEquals("Residual should be hour > 11", GT, unbound.op());
     Assert.assertEquals("Residual should be hour > 11", "hour", unbound.ref().name());
     Assert.assertEquals("Residual should be hour > 11", 11, unbound.literal().value());

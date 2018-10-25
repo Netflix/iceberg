@@ -1,5 +1,7 @@
 package com.netflix.iceberg.expressions;
 
+import java.util.function.Function;
+
 /**
  * This class represents a predicate that has been bound to a known field and will be comparing it to a value of
  * that field's type.

@@ -34,14 +34,14 @@ import java.util.UUID;
 public class TestStringLiteralConversions {
   @Test
   public void testStringToStringLiteral() {
-    Literal<CharSequence> string = Literal.of("abc");
+    ValueLiteral<CharSequence> string = Literals.from("abc");
     Assert.assertSame("Should return same instance", string, string.to(Types.StringType.get()));
   }
 
   @Test
   public void testStringToDateLiteral() {
-    Literal<CharSequence> dateStr = Literal.of("2017-08-18");
-    Literal<Integer> date = dateStr.to(Types.DateType.get());
+    ValueLiteral<CharSequence> dateStr = Literals.from("2017-08-18");
+    ValueLiteral<Integer> date = dateStr.to(Types.DateType.get());
 
     // use Avro's date conversion to validate the result
     Schema avroSchema = LogicalTypes.date().addToSchema(Schema.create(Schema.Type.INT));
@@ -60,8 +60,8 @@ public class TestStringLiteralConversions {
     TimeConversions.LossyTimeMicrosConversion avroConversion =
         new TimeConversions.LossyTimeMicrosConversion();
 
-    Literal<CharSequence> timeStr = Literal.of("14:21:01.919");
-    Literal<Long> time = timeStr.to(Types.TimeType.get());
+    ValueLiteral<CharSequence> timeStr = Literals.from("14:21:01.919");
+    ValueLiteral<Long> time = timeStr.to(Types.TimeType.get());
 
     long avroValue = avroConversion.toLong(
         new LocalTime(14, 21, 1, 919),
@@ -78,8 +78,8 @@ public class TestStringLiteralConversions {
         new TimeConversions.LossyTimestampMicrosConversion();
 
     // Timestamp with explicit UTC offset, +00:00
-    Literal<CharSequence> timestampStr = Literal.of("2017-08-18T14:21:01.919+00:00");
-    Literal<Long> timestamp = timestampStr.to(Types.TimestampType.withZone());
+    ValueLiteral<CharSequence> timestampStr = Literals.from("2017-08-18T14:21:01.919+00:00");
+    ValueLiteral<Long> timestamp = timestampStr.to(Types.TimestampType.withZone());
     long avroValue = avroConversion.toLong(
         new LocalDateTime(2017, 8, 18, 14, 21, 1, 919).toDateTime(DateTimeZone.UTC),
         avroSchema, avroSchema.getLogicalType());
@@ -87,14 +87,14 @@ public class TestStringLiteralConversions {
     Assert.assertEquals("Timestamp should match", avroValue, (long) timestamp.value());
 
     // Timestamp without an explicit zone should be UTC (equal to the previous converted value)
-    timestampStr = Literal.of("2017-08-18T14:21:01.919");
+    timestampStr = Literals.from("2017-08-18T14:21:01.919");
     timestamp = timestampStr.to(Types.TimestampType.withoutZone());
 
     Assert.assertEquals("Timestamp without zone should match UTC",
         avroValue, (long) timestamp.value());
 
     // Timestamp with an explicit offset should be adjusted to UTC
-    timestampStr = Literal.of("2017-08-18T14:21:01.919-07:00");
+    timestampStr = Literals.from("2017-08-18T14:21:01.919-07:00");
     timestamp = timestampStr.to(Types.TimestampType.withZone());
     avroValue = avroConversion.toLong(
         new LocalDateTime(2017, 8, 18, 21, 21, 1, 919).toDateTime(DateTimeZone.UTC),
@@ -107,22 +107,22 @@ public class TestStringLiteralConversions {
   @Test(expected = DateTimeException.class)
   public void testTimestampWithZoneWithoutZoneInLiteral() {
     // Zone must be present in literals when converting to timestamp with zone
-    Literal<CharSequence> timestampStr = Literal.of("2017-08-18T14:21:01.919");
+    ValueLiteral<CharSequence> timestampStr = Literals.from("2017-08-18T14:21:01.919");
     timestampStr.to(Types.TimestampType.withZone());
   }
 
   @Test(expected = DateTimeException.class)
   public void testTimestampWithoutZoneWithZoneInLiteral() {
     // Zone must not be present in literals when converting to timestamp without zone
-    Literal<CharSequence> timestampStr = Literal.of("2017-08-18T14:21:01.919+07:00");
+    ValueLiteral<CharSequence> timestampStr = Literals.from("2017-08-18T14:21:01.919+07:00");
     timestampStr.to(Types.TimestampType.withoutZone());
   }
 
   @Test
   public void testStringToUUIDLiteral() {
     UUID expected = UUID.randomUUID();
-    Literal<CharSequence> uuidStr = Literal.of(expected.toString());
-    Literal<UUID> uuid = uuidStr.to(Types.UUIDType.get());
+    ValueLiteral<CharSequence> uuidStr = Literals.from(expected.toString());
+    ValueLiteral<UUID> uuid = uuidStr.to(Types.UUIDType.get());
 
     Assert.assertEquals("UUID should match", expected, uuid.value());
   }
@@ -130,8 +130,8 @@ public class TestStringLiteralConversions {
   @Test
   public void testStringToDecimalLiteral() {
     BigDecimal expected = new BigDecimal("34.560");
-    Literal<CharSequence> decimalStr = Literal.of("34.560");
-    Literal<BigDecimal> decimal = decimalStr.to(Types.DecimalType.of(9, 3));
+    ValueLiteral<CharSequence> decimalStr = Literals.from("34.560");
+    ValueLiteral<BigDecimal> decimal = decimalStr.to(Types.DecimalType.of(9, 3));
 
     Assert.assertEquals("Decimal should have scale 3", 3, decimal.value().scale());
     Assert.assertEquals("Decimal should match", expected, decimal.value());

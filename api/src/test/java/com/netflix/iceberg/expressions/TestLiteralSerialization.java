@@ -26,30 +26,30 @@ import java.util.UUID;
 public class TestLiteralSerialization {
   @Test
   public void testLiterals() throws Exception {
-    Literal[] literals = new Literal[] {
-        Literal.of(false),
-        Literal.of(34),
-        Literal.of(35L),
-        Literal.of(36.75F),
-        Literal.of(8.75D),
-        Literal.of("2017-11-29").to(Types.DateType.get()),
-        Literal.of("11:30:07").to(Types.TimeType.get()),
-        Literal.of("2017-11-29T11:30:07.123").to(Types.TimestampType.withoutZone()),
-        Literal.of("2017-11-29T11:30:07.123+01:00").to(Types.TimestampType.withZone()),
-        Literal.of("abc"),
-        Literal.of(UUID.randomUUID()),
-        Literal.of(new byte[] { 1, 2, 3 }).to(Types.FixedType.ofLength(3)),
-        Literal.of(new byte[] { 3, 4, 5, 6 }).to(Types.BinaryType.get()),
-        Literal.of(new BigDecimal("122.50")),
+    ValueLiteral[] literals = new ValueLiteral[] {
+        TestLiterals.from(false),
+        TestLiterals.from(34),
+        TestLiterals.from(35L),
+        TestLiterals.from(36.75F),
+        TestLiterals.from(8.75D),
+        TestLiterals.from("2017-11-29").to(Types.DateType.get()),
+        TestLiterals.from("11:30:07").to(Types.TimeType.get()),
+        TestLiterals.from("2017-11-29T11:30:07.123").to(Types.TimestampType.withoutZone()),
+        TestLiterals.from("2017-11-29T11:30:07.123+01:00").to(Types.TimestampType.withZone()),
+        TestLiterals.from("abc"),
+        TestLiterals.from(UUID.randomUUID()),
+        TestLiterals.from(new byte[] { 1, 2, 3 }).to(Types.FixedType.ofLength(3)),
+        TestLiterals.from(new byte[] { 3, 4, 5, 6 }).to(Types.BinaryType.get()),
+        TestLiterals.from(new BigDecimal("122.50")),
     };
 
-    for (Literal<?> lit : literals) {
+    for (ValueLiteral<?> lit : literals) {
       checkValue(lit);
     }
   }
 
-  private <T> void checkValue(Literal<T> lit) throws Exception {
-    Literal<T> copy = TestHelpers.roundTripSerialize(lit);
+  private <T> void checkValue(ValueLiteral<T> lit) throws Exception {
+    ValueLiteral<T> copy = TestHelpers.roundTripSerialize(lit);
     Assert.assertEquals("Literal's comparator should consider values equal",
         0, lit.comparator().compare(lit.value(), copy.value()));
     Assert.assertEquals("Copy's comparator should consider values equal",

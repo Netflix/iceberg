@@ -65,7 +65,7 @@ public interface Transform<S, T> extends Serializable {
    * @param predicate a predicate for source values
    * @return an inclusive predicate on partition values
    */
-  UnboundPredicate<T> project(String name, BoundPredicate<S> predicate);
+  UnboundPredicate<T, ?> project(String name, BoundPredicate<S, ?> predicate);
 
   /**
    * Transforms a {@link BoundPredicate predicate} to a strict predicate on the partition values
@@ -77,7 +77,7 @@ public interface Transform<S, T> extends Serializable {
    * @param predicate a predicate for source values
    * @return an inclusive predicate on partition values
    */
-  UnboundPredicate<T> projectStrict(String name, BoundPredicate<S> predicate);
+  UnboundPredicate<T, ?> projectStrict(String name, BoundPredicate<S, ?> predicate);
 
   /**
    * Returns a human-readable String representation of a transformed value.

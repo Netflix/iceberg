@@ -16,10 +16,7 @@
 
 package com.netflix.iceberg;
 
-import com.netflix.iceberg.expressions.BoundPredicate;
-import com.netflix.iceberg.expressions.Expression;
-import com.netflix.iceberg.expressions.ExpressionVisitors;
-import com.netflix.iceberg.expressions.UnboundPredicate;
+import com.netflix.iceberg.expressions.*;
 import org.junit.Assert;
 import java.io.ByteArrayInputStream;
 import java.io.ByteArrayOutputStream;
@@ -32,24 +29,52 @@ import java.util.Map;
 import java.util.concurrent.Callable;
 
 public class TestHelpers {
-  public static <T> T assertAndUnwrap(Expression expr, Class<T> expected) {
+  public static <T> T assertAndUnwrapBoundValue(Expression expr, Class<T> expected) {
     Assert.assertTrue("Expression should have expected type: " + expected,
         expected.isInstance(expr));
     return expected.cast(expr);
   }
 
   @SuppressWarnings("unchecked")
-  public static <T> BoundPredicate<T> assertAndUnwrap(Expression expr) {
-    Assert.assertTrue("Expression should be a bound predicate: " + expr,
-        expr instanceof BoundPredicate);
-    return (BoundPredicate<T>) expr;
+  public static <T> BoundUnaryPredicate<T> assertAndUnwrapBoundUnary(Expression expr) {
+    Assert.assertTrue("Expression should be a bound unary predicate: " + expr,
+        expr instanceof BoundUnaryPredicate);
+    return (BoundUnaryPredicate<T>) expr;
   }
 
   @SuppressWarnings("unchecked")
-  public static <T> UnboundPredicate<T> assertAndUnwrapUnbound(Expression expr) {
-    Assert.assertTrue("Expression should be an unbound predicate: " + expr,
-        expr instanceof UnboundPredicate);
-    return (UnboundPredicate<T>) expr;
+  public static <T> BoundValuePredicate<T> assertAndUnwrapBoundValue(Expression expr) {
+    Assert.assertTrue("Expression should be a bound value predicate: " + expr,
+        expr instanceof BoundValuePredicate);
+    return (BoundValuePredicate<T>) expr;
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> BoundCollectionPredicate<T> assertAndUnwrapBoundCollection(Expression expr) {
+    Assert.assertTrue("Expression should be a bound collection predicate: " + expr,
+        expr instanceof BoundCollectionPredicate);
+    return (BoundCollectionPredicate<T>) expr;
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> UnboundUnaryPredicate<T> assertAndUnwrapUnboundUnary(Expression expr) {
+    Assert.assertTrue("Expression should be an unbound unary predicate: " + expr,
+        expr instanceof UnboundUnaryPredicate);
+    return (UnboundUnaryPredicate<T>) expr;
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> UnboundValuePredicate<T> assertAndUnwrapUnboundValue(Expression expr) {
+    Assert.assertTrue("Expression should be an unbound value predicate: " + expr,
+        expr instanceof UnboundValuePredicate);
+    return (UnboundValuePredicate<T>) expr;
+  }
+
+  @SuppressWarnings("unchecked")
+  public static <T> UnboundCollectionPredicate<T> assertAndUnwrapUnboundCollection(Expression expr) {
+    Assert.assertTrue("Expression should be an unbound collection predicate: " + expr,
+        expr instanceof UnboundCollectionPredicate);
+    return (UnboundCollectionPredicate<T>) expr;
   }
 
   public static void assertAllReferencesBound(String message, Expression expr) {
@@ -77,7 +102,7 @@ public class TestHelpers {
     }
 
     @Override
-    public <T> Void predicate(UnboundPredicate<T> pred) {
+    public <T> Void predicate(UnboundPredicate<T, ?> pred) {
       Assert.fail(message + ": Found unbound predicate: " + pred);
       return null;
     }

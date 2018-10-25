@@ -102,7 +102,6 @@ public class Expressions {
     return new UnboundCollectionPredicate<>(Operation.IN, ref(name), values);
   }
 
-  // TODO: Start using this wherever we have a reference to in
   public static <T> UnboundCollectionPredicate<T> notIn(String name, Collection<T> values) {
     return new UnboundCollectionPredicate<>(Operation.NOT_IN, ref(name), values);
   }

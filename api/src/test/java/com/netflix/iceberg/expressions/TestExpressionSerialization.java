@@ -23,6 +23,10 @@ import com.netflix.iceberg.types.Types;
 import org.junit.Assert;
 import org.junit.Test;
 
+import java.util.Arrays;
+import java.util.Comparator;
+import java.util.stream.IntStream;
+
 public class TestExpressionSerialization {
   @Test
   public void testExpressions() throws Exception {
@@ -103,12 +107,32 @@ public class TestExpressionSerialization {
       return false;
     }
 
-    if (left.op() == Operation.IS_NULL || left.op() == Operation.NOT_NULL) {
+    if (left instanceof UnboundUnaryPredicate) {
       return true;
     }
 
-    return left.literal().comparator()
-        .compare(left.literal().value(), right.literal().value()) == 0;
+    if (left instanceof UnboundValuePredicate && right instanceof UnboundValuePredicate) {
+      ValueLiteral<?> ll = ((UnboundValuePredicate<?>) left).literal();
+      ValueLiteral<?> rl = ((UnboundValuePredicate<?>) right).literal();
+      Comparator<Object> comparator = (Comparator<Object>)ll.comparator();
+      return comparator.compare(ll.value(), rl.value()) == 0;
+    }
+    
+    if (left instanceof UnboundCollectionPredicate && right instanceof UnboundCollectionPredicate) {
+      CollectionLiteral<?> ll = ((UnboundCollectionPredicate<?>) left).literal();
+      Object[] l = ll.values().toArray();
+      Object[] r = ((UnboundCollectionPredicate<?>) right).literal().values().toArray();
+      Comparator<Object> comparator = (Comparator<Object>)ll.comparator();
+
+      if (l.length != r.length) {
+        return false;
+      }
+
+      return IntStream.range(0, l.length)
+        .allMatch(i -> comparator.compare(l[i], r[i]) == 0);
+    }
+
+    return false;
   }
 
   private static boolean equals(Reference left, Reference right) {

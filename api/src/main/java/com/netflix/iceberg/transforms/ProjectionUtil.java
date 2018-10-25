@@ -16,59 +16,61 @@
 
 package com.netflix.iceberg.transforms;
 
-import com.netflix.iceberg.expressions.BoundPredicate;
-import com.netflix.iceberg.expressions.Expression;
-import com.netflix.iceberg.expressions.UnboundPredicate;
+import com.netflix.iceberg.expressions.*;
+
 import java.math.BigDecimal;
 import java.math.BigInteger;
+import java.util.Collection;
+import java.util.List;
+import java.util.stream.Collectors;
 
-import static com.netflix.iceberg.expressions.Expressions.predicate;
+import static com.netflix.iceberg.expressions.Expressions.*;
 
 class ProjectionUtil {
-  static <T> UnboundPredicate<T> truncateInteger(
-      String name, BoundPredicate<Integer> pred, Transform<Integer, T> transform) {
+  static <T> UnboundValuePredicate<T> truncateInteger(
+      String name, BoundValuePredicate<Integer> pred, Transform<Integer, T> transform) {
     int boundary = pred.literal().value();
     switch (pred.op()) {
       case LT:
         // adjust closed and then transform ltEq
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(boundary - 1));
+        return lessThanOrEqual(name, transform.apply(boundary - 1));
       case LT_EQ:
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(boundary));
+        return lessThanOrEqual(name, transform.apply(boundary));
       case GT:
         // adjust closed and then transform gtEq
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(boundary + 1));
+        return greaterThanOrEqual(name, transform.apply(boundary + 1));
       case GT_EQ:
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(boundary));
+        return greaterThanOrEqual(name, transform.apply(boundary));
       case EQ:
-        return predicate(pred.op(), name, transform.apply(boundary));
+        return equal(name, transform.apply(boundary));
       default:
         return null;
     }
   }
 
-  static <T> UnboundPredicate<T> truncateLong(
-      String name, BoundPredicate<Long> pred, Transform<Long, T> transform) {
+  static <T> UnboundValuePredicate<T> truncateLong(
+      String name, BoundValuePredicate<Long> pred, Transform<Long, T> transform) {
     long boundary = pred.literal().value();
     switch (pred.op()) {
       case LT:
         // adjust closed and then transform ltEq
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(boundary - 1L));
+        return lessThanOrEqual(name, transform.apply(boundary - 1L));
       case LT_EQ:
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(boundary));
+        return lessThanOrEqual(name, transform.apply(boundary));
       case GT:
         // adjust closed and then transform gtEq
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(boundary + 1L));
+        return greaterThanOrEqual(name, transform.apply(boundary + 1L));
       case GT_EQ:
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(boundary));
+        return greaterThanOrEqual(name, transform.apply(boundary));
       case EQ:
-        return predicate(pred.op(), name, transform.apply(boundary));
+        return equal(name, transform.apply(boundary));
       default:
         return null;
     }
   }
 
-  static <T> UnboundPredicate<T> truncateDecimal(
-      String name, BoundPredicate<BigDecimal> pred,
+  static <T> UnboundValuePredicate<T> truncateDecimal(
+      String name, BoundValuePredicate<BigDecimal> pred,
       Transform<BigDecimal, T> transform) {
     BigDecimal boundary = pred.literal().value();
     switch (pred.op()) {
@@ -77,38 +79,54 @@ class ProjectionUtil {
         BigDecimal minusOne = new BigDecimal(
             boundary.unscaledValue().subtract(BigInteger.ONE),
             boundary.scale());
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(minusOne));
+        return lessThanOrEqual(name, transform.apply(minusOne));
       case LT_EQ:
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(boundary));
+        return lessThanOrEqual(name, transform.apply(boundary));
       case GT:
         // adjust closed and then transform gtEq
         BigDecimal plusOne = new BigDecimal(
             boundary.unscaledValue().add(BigInteger.ONE),
             boundary.scale());
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(plusOne));
+        return greaterThanOrEqual(name, transform.apply(plusOne));
       case GT_EQ:
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(boundary));
+        return greaterThanOrEqual(name, transform.apply(boundary));
       case EQ:
-        return predicate(pred.op(), name, transform.apply(boundary));
+        return equal(name, transform.apply(boundary));
       default:
         return null;
     }
   }
 
-  static <S, T> UnboundPredicate<T> truncateArray(
-      String name, BoundPredicate<S> pred, Transform<S, T> transform) {
+  static <S, T> UnboundValuePredicate<T> truncateArray(
+      String name, BoundValuePredicate<S> pred, Transform<S, T> transform) {
+
     S boundary = pred.literal().value();
+
     switch (pred.op()) {
       case LT:
       case LT_EQ:
-        return predicate(Expression.Operation.LT_EQ, name, transform.apply(boundary));
+        return lessThanOrEqual(name, transform.apply(boundary));
       case GT:
       case GT_EQ:
-        return predicate(Expression.Operation.GT_EQ, name, transform.apply(boundary));
+        return greaterThanOrEqual(name, transform.apply(boundary));
       case EQ:
-        return predicate(Expression.Operation.EQ, name, transform.apply(boundary));
-//        case IN: // TODO
-//          return Expressions.predicate(Operation.IN, name, transform.apply(boundary));
+        return equal(name, transform.apply(boundary));
+      default:
+        return null;
+    }
+  }
+
+  static <S, T> UnboundCollectionPredicate<T> truncate(
+      String name, BoundCollectionPredicate<S> pred, Transform<S, T> transform) {
+
+    Collection<S> boundary = pred.literal().values();
+    Collection<T> transformed = boundary.stream().map(transform::apply).collect(Collectors.toList());
+
+    switch (pred.op()) {
+      case IN:
+        return in(name, transformed);
+      case NOT_IN:
+        return notIn(name, transformed);
       default:
         return null;
     }

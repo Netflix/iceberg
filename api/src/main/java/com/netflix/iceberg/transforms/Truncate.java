@@ -17,18 +17,11 @@
 package com.netflix.iceberg.transforms;
 
 import com.google.common.base.Objects;
-import com.netflix.iceberg.expressions.BoundPredicate;
-import com.netflix.iceberg.expressions.Expressions;
-import com.netflix.iceberg.expressions.UnboundPredicate;
+import com.netflix.iceberg.expressions.*;
 import com.netflix.iceberg.types.Type;
 import java.math.BigDecimal;
 import java.math.BigInteger;
 import java.nio.ByteBuffer;
-
-import static com.netflix.iceberg.expressions.Expression.Operation.IS_NULL;
-import static com.netflix.iceberg.expressions.Expression.Operation.LT;
-import static com.netflix.iceberg.expressions.Expression.Operation.LT_EQ;
-import static com.netflix.iceberg.expressions.Expression.Operation.NOT_NULL;
 
 abstract class Truncate<T> implements Transform<T, T> {
   @SuppressWarnings("unchecked")
@@ -83,15 +76,24 @@ abstract class Truncate<T> implements Transform<T, T> {
     }
 
     @Override
-    public UnboundPredicate<Integer> project(String name, BoundPredicate<Integer> pred) {
-      if (pred.op() == NOT_NULL || pred.op() == IS_NULL) {
-        return Expressions.predicate(pred.op(), name);
+    public UnboundPredicate<Integer, ?> project(String name, BoundPredicate<Integer, ?> pred) {
+      if (pred instanceof BoundValuePredicate) {
+        return ProjectionUtil.truncateInteger(name, (BoundValuePredicate<Integer>)pred, this);
       }
-      return ProjectionUtil.truncateInteger(name, pred, this);
+
+      if (pred instanceof BoundUnaryPredicate) {
+        return ((BoundUnaryPredicate<Integer>) pred).typedUnbind(name);
+      }
+
+      if (pred instanceof BoundCollectionPredicate) {
+        return ProjectionUtil.truncate(name, (BoundCollectionPredicate<Integer>)pred, this);
+      }
+
+      throw new UnsupportedOperationException();
     }
 
     @Override
-    public UnboundPredicate<Integer> projectStrict(String name, BoundPredicate<Integer> predicate) {
+    public UnboundPredicate<Integer, ?> projectStrict(String name, BoundPredicate<Integer, ?> predicate) {
       // TODO: for integers, can this return the original predicate?
       // No. the predicate needs to be in terms of the applied value. For all x, apply(x) <= x.
       // Therefore, the lower bound can be transformed outside of a greater-than bound.
@@ -101,33 +103,31 @@ abstract class Truncate<T> implements Transform<T, T> {
       int outImage;
       switch (predicate.op()) {
         case LT:
-          in = predicate.literal().value() - 1;
-          out = predicate.literal().value();
+          in = ((BoundValuePredicate<Integer>) predicate).literal().value() - 1;
+          out = ((BoundValuePredicate<Integer>) predicate).literal().value();
           inImage = apply(in);
           outImage = apply(out);
           if (inImage != outImage) {
-            return Expressions.predicate(LT_EQ, name, inImage);
+            return Expressions.lessThanOrEqual(name, inImage);
           } else {
-            return Expressions.predicate(LT, name, inImage);
+            return Expressions.lessThan(name, inImage);
           }
         case LT_EQ:
-          in = predicate.literal().value();
-          out = predicate.literal().value() + 1;
+          in = ((BoundValuePredicate<Integer>) predicate).literal().value();
+          out = ((BoundValuePredicate<Integer>) predicate).literal().value() + 1;
           inImage = apply(in);
           outImage = apply(out);
           if (inImage != outImage) {
-            return Expressions.predicate(LT_EQ, name, inImage);
+            return Expressions.lessThanOrEqual(name, inImage);
           } else {
-            return Expressions.predicate(LT, name, inImage);
+            return Expressions.lessThan(name, inImage);
           }
         case GT:
         case GT_EQ:
         case EQ:
         case NOT_EQ:
-//        case IN:
-//          break;
-//        case NOT_IN:
-//          break;
+        case IN:
+        case NOT_IN:
         default:
           return null;
       }
@@ -180,15 +180,24 @@ abstract class Truncate<T> implements Transform<T, T> {
     }
 
     @Override
-    public UnboundPredicate<Long> project(String name, BoundPredicate<Long> pred) {
-      if (pred.op() == NOT_NULL || pred.op() == IS_NULL) {
-        return Expressions.predicate(pred.op(), name);
+    public UnboundPredicate<Long, ?> project(String name, BoundPredicate<Long, ?> pred) {
+      if (pred instanceof BoundValuePredicate) {
+        return ProjectionUtil.truncateLong(name, (BoundValuePredicate<Long>)pred, this);
       }
-      return ProjectionUtil.truncateLong(name, pred, this);
+
+      if (pred instanceof BoundUnaryPredicate) {
+        return ((BoundUnaryPredicate<Long>) pred).typedUnbind(name);
+      }
+
+      if (pred instanceof BoundCollectionPredicate) {
+        return ProjectionUtil.truncate(name, (BoundCollectionPredicate<Long>)pred, this);
+      }
+
+      throw new UnsupportedOperationException();
     }
 
     @Override
-    public UnboundPredicate<Long> projectStrict(String name, BoundPredicate<Long> predicate) {
+    public UnboundPredicate<Long, ?> projectStrict(String name, BoundPredicate<Long, ?> predicate) {
       return null;
     }
 
@@ -239,17 +248,26 @@ abstract class Truncate<T> implements Transform<T, T> {
     }
 
     @Override
-    public UnboundPredicate<CharSequence> project(String name,
-                                                  BoundPredicate<CharSequence> pred) {
-      if (pred.op() == NOT_NULL || pred.op() == IS_NULL) {
-        return Expressions.predicate(pred.op(), name);
+    public UnboundPredicate<CharSequence, ?> project(String name,
+                                                     BoundPredicate<CharSequence, ?> pred) {
+      if (pred instanceof BoundValuePredicate) {
+        return ProjectionUtil.truncateArray(name, (BoundValuePredicate<CharSequence>)pred, this);
       }
-      return ProjectionUtil.truncateArray(name, pred, this);
+
+      if (pred instanceof BoundUnaryPredicate) {
+        return ((BoundUnaryPredicate<CharSequence>) pred).typedUnbind(name);
+      }
+
+      if (pred instanceof BoundCollectionPredicate) {
+        return ProjectionUtil.truncate(name, (BoundCollectionPredicate<CharSequence>)pred, this);
+      }
+
+      throw new UnsupportedOperationException();
     }
 
     @Override
-    public UnboundPredicate<CharSequence> projectStrict(String name,
-                                                        BoundPredicate<CharSequence> predicate) {
+    public UnboundPredicate<CharSequence, ?> projectStrict(String name,
+                                                           BoundPredicate<CharSequence, ?> predicate) {
       return null;
     }
 
@@ -302,17 +320,26 @@ abstract class Truncate<T> implements Transform<T, T> {
     }
 
     @Override
-    public UnboundPredicate<ByteBuffer> project(String name,
-                                                BoundPredicate<ByteBuffer> pred) {
-      if (pred.op() == NOT_NULL || pred.op() == IS_NULL) {
-        return Expressions.predicate(pred.op(), name);
+    public UnboundPredicate<ByteBuffer, ?> project(String name,
+                                                   BoundPredicate<ByteBuffer, ?> pred) {
+      if (pred instanceof BoundValuePredicate) {
+        return ProjectionUtil.truncateArray(name, (BoundValuePredicate<ByteBuffer>)pred, this);
       }
-      return ProjectionUtil.truncateArray(name, pred, this);
+
+      if (pred instanceof BoundUnaryPredicate) {
+        return ((BoundUnaryPredicate<ByteBuffer>) pred).typedUnbind(name);
+      }
+
+      if (pred instanceof BoundCollectionPredicate) {
+        return ProjectionUtil.truncate(name, (BoundCollectionPredicate<ByteBuffer>)pred, this);
+      }
+
+      throw new UnsupportedOperationException();
     }
 
     @Override
-    public UnboundPredicate<ByteBuffer> projectStrict(String name,
-                                                      BoundPredicate<ByteBuffer> predicate) {
+    public UnboundPredicate<ByteBuffer, ?> projectStrict(String name,
+                                                         BoundPredicate<ByteBuffer, ?> predicate) {
       return null;
     }
 
@@ -374,17 +401,26 @@ abstract class Truncate<T> implements Transform<T, T> {
     }
 
     @Override
-    public UnboundPredicate<BigDecimal> project(String name,
-                                                BoundPredicate<BigDecimal> pred) {
-      if (pred.op() == NOT_NULL || pred.op() == IS_NULL) {
-        return Expressions.predicate(pred.op(), name);
+    public UnboundPredicate<BigDecimal, ?> project(String name,
+                                                   BoundPredicate<BigDecimal, ?> pred) {
+      if (pred instanceof BoundValuePredicate) {
+        return ProjectionUtil.truncateDecimal(name, (BoundValuePredicate<BigDecimal>)pred, this);
       }
-      return ProjectionUtil.truncateDecimal(name, pred, this);
+
+      if (pred instanceof BoundUnaryPredicate) {
+        return ((BoundUnaryPredicate<BigDecimal>) pred).typedUnbind(name);
+      }
+
+      if (pred instanceof BoundCollectionPredicate) {
+        return ProjectionUtil.truncate(name, (BoundCollectionPredicate<BigDecimal>)pred, this);
+      }
+
+      throw new UnsupportedOperationException();
     }
 
     @Override
-    public UnboundPredicate<BigDecimal> projectStrict(String name,
-                                                      BoundPredicate<BigDecimal> predicate) {
+    public UnboundPredicate<BigDecimal, ?> projectStrict(String name,
+                                                         BoundPredicate<BigDecimal, ?> predicate) {
       return null;
     }
 

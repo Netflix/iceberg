@@ -16,9 +16,7 @@
 
 package com.netflix.iceberg.transforms;
 
-import com.netflix.iceberg.expressions.BoundPredicate;
-import com.netflix.iceberg.expressions.Expressions;
-import com.netflix.iceberg.expressions.UnboundPredicate;
+import com.netflix.iceberg.expressions.*;
 import com.netflix.iceberg.types.Type;
 import com.netflix.iceberg.types.Types;
 import java.time.Instant;
@@ -62,15 +60,24 @@ enum Dates implements Transform<Integer, Integer> {
   }
 
   @Override
-  public UnboundPredicate<Integer> project(String name, BoundPredicate<Integer> pred) {
-    if (pred.op() == NOT_NULL || pred.op() == IS_NULL) {
-      return Expressions.predicate(pred.op(), name);
+  public UnboundPredicate<Integer, ?> project(String name, BoundPredicate<Integer, ?> pred) {
+    if (pred instanceof BoundValuePredicate) {
+      return ProjectionUtil.truncateInteger(name, (BoundValuePredicate<Integer>)pred, this);
     }
-    return ProjectionUtil.truncateInteger(name, pred, this);
+
+    if (pred instanceof BoundUnaryPredicate) {
+      return ((BoundUnaryPredicate<Integer>) pred).unbind(name);
+    }
+
+    if (pred instanceof BoundCollectionPredicate) {
+      return ProjectionUtil.truncate(name, (BoundCollectionPredicate<Integer>) pred, this);
+    }
+
+    throw new UnsupportedOperationException();
   }
 
   @Override
-  public UnboundPredicate<Integer> projectStrict(String name, BoundPredicate<Integer> predicate) {
+  public UnboundPredicate<Integer, ?> projectStrict(String name, BoundPredicate<Integer, ?> predicate) {
     return null;
   }
 

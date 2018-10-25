@@ -23,6 +23,7 @@ import com.google.common.collect.Sets;
 import com.google.common.hash.HashFunction;
 import com.google.common.hash.Hashing;
 import com.netflix.iceberg.expressions.BoundPredicate;
+import com.netflix.iceberg.expressions.BoundValuePredicate;
 import com.netflix.iceberg.expressions.Expressions;
 import com.netflix.iceberg.expressions.UnboundPredicate;
 import com.netflix.iceberg.types.Type;
@@ -104,11 +105,11 @@ abstract class Bucket<T> implements Transform<T, Integer> {
   }
 
   @Override
-  public UnboundPredicate<Integer> project(String name, BoundPredicate<T> predicate) {
+  public UnboundPredicate<Integer, ?> project(String name, BoundPredicate<T, ?> predicate) {
     switch (predicate.op()) {
       case EQ:
-        return Expressions.predicate(
-            predicate.op(), name, apply(predicate.literal().value()));
+        return ((BoundValuePredicate<T>) predicate).unbind(name).transform(this::apply);
+        // TODO:
 //      case IN:
 //        return Expressions.predicate();
       default:
@@ -120,11 +121,11 @@ abstract class Bucket<T> implements Transform<T, Integer> {
   }
 
   @Override
-  public UnboundPredicate<Integer> projectStrict(String name, BoundPredicate<T> predicate) {
+  public UnboundPredicate<Integer, ?> projectStrict(String name, BoundPredicate<T, ?> predicate) {
     switch (predicate.op()) {
       case NOT_EQ: // TODO: need to translate not(eq(...)) into notEq in expressions
-        return Expressions.predicate(predicate.op(), name, apply(predicate.literal().value()));
-//      case NOT_IN:
+        return ((BoundValuePredicate<T>) predicate).unbind(name).transform(this::apply);
+//      TODO: case NOT_IN:
 //        return null;
       default:
         // no strict projection for comparison or equality

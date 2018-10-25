@@ -21,7 +21,7 @@ import java.util.Comparator;
 
 /**
  * Represents a literal fixed value in an expression predicate
- * @param <T> The Java type of the value represented
+ * @param <T> The Java type of the value wrapped by a {@link Literal}
  */
 public interface Literal<T> extends Serializable {
   /**

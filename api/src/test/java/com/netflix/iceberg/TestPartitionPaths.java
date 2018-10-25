@@ -17,7 +17,8 @@
 package com.netflix.iceberg;
 
 import com.netflix.iceberg.TestHelpers.Row;
-import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.transforms.Transform;
 import com.netflix.iceberg.types.Types;
 import org.junit.Assert;
@@ -40,7 +41,7 @@ public class TestPartitionPaths {
     Transform hour = spec.getFieldBySourceId(3).transform();
     Transform bucket = spec.getFieldBySourceId(1).transform();
 
-    Literal<Long> ts = Literal.of("2017-12-01T10:12:55.038194").to(Types.TimestampType.withoutZone());
+    ValueLiteral<Long> ts = TestLiterals.from("2017-12-01T10:12:55.038194").to(Types.TimestampType.withoutZone());
     Object tsHour = hour.apply(ts.value());
     Object idBucket = bucket.apply(1);
 

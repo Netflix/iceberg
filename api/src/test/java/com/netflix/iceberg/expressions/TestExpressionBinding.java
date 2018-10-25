@@ -77,12 +77,12 @@ public class TestExpressionBinding {
     TestHelpers.assertAllReferencesBound("And", boundExpr);
 
     // make sure the result is an And
-    And and = TestHelpers.assertAndUnwrap(boundExpr, And.class);
+    And and = TestHelpers.assertAndUnwrapBoundValue(boundExpr, And.class);
 
     // make sure the refs are for the right fields
-    BoundPredicate<?> left = TestHelpers.assertAndUnwrap(and.left());
+    BoundValuePredicate<?> left = TestHelpers.assertAndUnwrapBoundValue(and.left());
     Assert.assertEquals("Should bind x correctly", 0, left.ref().fieldId());
-    BoundPredicate<?> right = TestHelpers.assertAndUnwrap(and.right());
+    BoundValuePredicate<?> right = TestHelpers.assertAndUnwrapBoundValue(and.right());
     Assert.assertEquals("Should bind y correctly", 1, right.ref().fieldId());
   }
 
@@ -93,12 +93,12 @@ public class TestExpressionBinding {
     TestHelpers.assertAllReferencesBound("Or", boundExpr);
 
     // make sure the result is an Or
-    Or or = TestHelpers.assertAndUnwrap(boundExpr, Or.class);
+    Or or = TestHelpers.assertAndUnwrapBoundValue(boundExpr, Or.class);
 
     // make sure the refs are for the right fields
-    BoundPredicate<?> left = TestHelpers.assertAndUnwrap(or.left());
+    BoundValuePredicate<?> left = TestHelpers.assertAndUnwrapBoundValue(or.left());
     Assert.assertEquals("Should bind z correctly", 2, left.ref().fieldId());
-    BoundPredicate<?> right = TestHelpers.assertAndUnwrap(or.right());
+    BoundValuePredicate<?> right = TestHelpers.assertAndUnwrapBoundValue(or.right());
     Assert.assertEquals("Should bind y correctly", 1, right.ref().fieldId());
   }
 
@@ -109,10 +109,10 @@ public class TestExpressionBinding {
     TestHelpers.assertAllReferencesBound("Not", boundExpr);
 
     // make sure the result is a Not
-    Not not = TestHelpers.assertAndUnwrap(boundExpr, Not.class);
+    Not not = TestHelpers.assertAndUnwrapBoundValue(boundExpr, Not.class);
 
     // make sure the refs are for the right fields
-    BoundPredicate<?> child = TestHelpers.assertAndUnwrap(not.child());
+    BoundValuePredicate<?> child = TestHelpers.assertAndUnwrapBoundValue(not.child());
     Assert.assertEquals("Should bind x correctly", 0, child.ref().fieldId());
   }
 
@@ -144,7 +144,7 @@ public class TestExpressionBinding {
         alwaysFalse(), Binder.bind(STRUCT, and(lessThan("y", 100), lessThan("z", -9999999999L))));
 
     Expression bound = Binder.bind(STRUCT, not(not(lessThan("y", 100))));
-    BoundPredicate<?> pred = TestHelpers.assertAndUnwrap(bound);
+    BoundValuePredicate<?> pred = TestHelpers.assertAndUnwrapBoundValue(bound);
     Assert.assertEquals("Should have the correct bound field", 1, pred.ref().fieldId());
   }
 }

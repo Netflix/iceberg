@@ -17,9 +17,7 @@
 package com.netflix.iceberg.transforms;
 
 import com.google.common.base.Objects;
-import com.netflix.iceberg.expressions.BoundPredicate;
-import com.netflix.iceberg.expressions.Expressions;
-import com.netflix.iceberg.expressions.UnboundPredicate;
+import com.netflix.iceberg.expressions.*;
 import com.netflix.iceberg.types.Type;
 import com.netflix.iceberg.types.Types;
 import java.nio.ByteBuffer;
@@ -52,17 +50,25 @@ class Identity<T> implements Transform<T, T> {
   }
 
   @Override
-  public UnboundPredicate<T> project(String name, BoundPredicate<T> predicate) {
+  public UnboundPredicate<T, ?> project(String name, BoundPredicate<T, ?> predicate) {
     return projectStrict(name, predicate);
   }
 
   @Override
-  public UnboundPredicate<T> projectStrict(String name, BoundPredicate<T> predicate) {
-    if (predicate.literal() != null) {
-      return Expressions.predicate(predicate.op(), name, predicate.literal().value());
-    } else {
-      return Expressions.predicate(predicate.op(), name);
+  public UnboundPredicate<T, ?> projectStrict(String name, BoundPredicate<T, ?> predicate) {
+    if (predicate instanceof BoundUnaryPredicate) {
+      return ((BoundUnaryPredicate<T>)predicate).typedUnbind(name);
     }
+
+    if (predicate instanceof BoundValuePredicate) {
+      return ((BoundValuePredicate<T>) predicate).unbind(name);
+    }
+
+    if (predicate instanceof BoundCollectionPredicate) {
+      return ((BoundCollectionPredicate<T>) predicate).unbind(name);
+    }
+
+    throw new IllegalArgumentException("Unsupported predicate type");
   }
 
   @Override
