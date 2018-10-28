@@ -19,12 +19,8 @@ package com.netflix.iceberg.spark;
 import com.google.common.base.Preconditions;
 import com.google.common.collect.ImmutableMap;
 import com.netflix.iceberg.Schema;
-import com.netflix.iceberg.expressions.Binder;
-import com.netflix.iceberg.expressions.BoundReference;
-import com.netflix.iceberg.expressions.Expression;
+import com.netflix.iceberg.expressions.*;
 import com.netflix.iceberg.expressions.Expression.Operation;
-import com.netflix.iceberg.expressions.ExpressionVisitors;
-import com.netflix.iceberg.expressions.Literal;
 import org.apache.spark.sql.Column;
 import org.apache.spark.sql.catalyst.expressions.And$;
 import org.apache.spark.sql.catalyst.expressions.Not$;
@@ -46,20 +42,14 @@ import org.apache.spark.sql.sources.Not;
 import org.apache.spark.sql.sources.Or;
 import java.sql.Date;
 import java.sql.Timestamp;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 import static com.netflix.iceberg.expressions.ExpressionVisitors.visit;
-import static com.netflix.iceberg.expressions.Expressions.alwaysFalse;
-import static com.netflix.iceberg.expressions.Expressions.and;
-import static com.netflix.iceberg.expressions.Expressions.equal;
-import static com.netflix.iceberg.expressions.Expressions.greaterThan;
-import static com.netflix.iceberg.expressions.Expressions.greaterThanOrEqual;
-import static com.netflix.iceberg.expressions.Expressions.isNull;
-import static com.netflix.iceberg.expressions.Expressions.lessThan;
-import static com.netflix.iceberg.expressions.Expressions.lessThanOrEqual;
-import static com.netflix.iceberg.expressions.Expressions.not;
-import static com.netflix.iceberg.expressions.Expressions.notNull;
-import static com.netflix.iceberg.expressions.Expressions.or;
+import static com.netflix.iceberg.expressions.Expressions.*;
 
 public class SparkFilters {
   private SparkFilters() {
@@ -128,12 +118,15 @@ public class SparkFilters {
 
         case IN:
           In inFilter = (In) filter;
-          Expression in = alwaysFalse();
-          for (Object value : inFilter.values()) {
-            in = or(in, equal(inFilter.attribute(), convertLiteral(value)));
-          }
-          return in;
+  
+          List<Object> literalValues = Arrays
+                  .stream(inFilter.values())
+                  .map(SparkFilters::convertLiteral)
+                  .collect(Collectors.toList());
 
+          return in(inFilter.attribute(), literalValues);
+
+        // TODO: NOT_IN
         case NOT:
           Not notFilter = (Not) filter;
           Expression child = convert(notFilter.child());

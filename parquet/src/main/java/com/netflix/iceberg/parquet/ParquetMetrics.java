@@ -21,7 +21,7 @@ import com.google.common.collect.Sets;
 import com.netflix.iceberg.Metrics;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.exceptions.RuntimeIOException;
-import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.types.Conversions;
 import com.netflix.iceberg.types.Types;
@@ -31,6 +31,7 @@ import org.apache.parquet.hadoop.metadata.BlockMetaData;
 import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.hadoop.metadata.ParquetMetadata;
 import org.apache.parquet.schema.MessageType;
+
 import java.io.IOException;
 import java.io.Serializable;
 import java.nio.ByteBuffer;
@@ -57,8 +58,8 @@ public class ParquetMetrics implements Serializable {
     Map<Integer, Long> columnSizes = Maps.newHashMap();
     Map<Integer, Long> valueCounts = Maps.newHashMap();
     Map<Integer, Long> nullValueCounts = Maps.newHashMap();
-    Map<Integer, Literal<?>> lowerBounds = Maps.newHashMap();
-    Map<Integer, Literal<?>> upperBounds = Maps.newHashMap();
+    Map<Integer, ValueLiteral<?>> lowerBounds = Maps.newHashMap();
+    Map<Integer, ValueLiteral<?>> upperBounds = Maps.newHashMap();
     Set<Integer> missingStats = Sets.newHashSet();
 
     MessageType parquetType = metadata.getFileMetaData().getSchema();
@@ -113,24 +114,24 @@ public class ParquetMetrics implements Serializable {
   }
 
   @SuppressWarnings("unchecked")
-  private static <T> void updateMin(Map<Integer, Literal<?>> lowerBounds, int id, Literal<T> min) {
-    Literal<T> currentMin = (Literal<T>) lowerBounds.get(id);
+  private static <T> void updateMin(Map<Integer, ValueLiteral<?>> lowerBounds, int id, ValueLiteral<T> min) {
+    ValueLiteral<T> currentMin = (ValueLiteral<T>) lowerBounds.get(id);
     if (currentMin == null || min.comparator().compare(min.value(), currentMin.value()) < 0) {
       lowerBounds.put(id, min);
     }
   }
 
   @SuppressWarnings("unchecked")
-  private static <T> void updateMax(Map<Integer, Literal<?>> upperBounds, int id, Literal<T> max) {
-    Literal<T> currentMax = (Literal<T>) upperBounds.get(id);
+  private static <T> void updateMax(Map<Integer, ValueLiteral<?>> upperBounds, int id, ValueLiteral<T> max) {
+    ValueLiteral<T> currentMax = (ValueLiteral<T>) upperBounds.get(id);
     if (currentMax == null || max.comparator().compare(max.value(), currentMax.value()) > 0) {
       upperBounds.put(id, max);
     }
   }
 
-  private static Map<Integer, ByteBuffer> toBufferMap(Schema schema, Map<Integer, Literal<?>> map) {
+  private static Map<Integer, ByteBuffer> toBufferMap(Schema schema, Map<Integer, ValueLiteral<?>> map) {
     Map<Integer, ByteBuffer> bufferMap = Maps.newHashMap();
-    for (Map.Entry<Integer, Literal<?>> entry : map.entrySet()) {
+    for (Map.Entry<Integer, ValueLiteral<?>> entry : map.entrySet()) {
       bufferMap.put(entry.getKey(),
           Conversions.toByteBuffer(schema.findType(entry.getKey()), entry.getValue().value()));
     }

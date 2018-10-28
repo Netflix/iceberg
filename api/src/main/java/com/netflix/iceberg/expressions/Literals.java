@@ -39,30 +39,42 @@ import java.util.List;
 import java.util.UUID;
 import java.util.stream.Collectors;
 
-class Literals {
+public class Literals {
   private Literals() {
   }
 
   private static final OffsetDateTime EPOCH = Instant.ofEpochSecond(0).atOffset(ZoneOffset.UTC);
   private static final LocalDate EPOCH_DAY = EPOCH.toLocalDate();
 
-  static <T extends CharSequence> ValueLiteral<CharSequence> from(T value) {
+  /**
+   * Create a {@link ValueLiteral} from anything that extends a {@link CharSequence}.
+   *
+   * @param value a character sequence
+   * @return a {@link ValueLiteral<CharSequence>} for the given value
+   */
+  public static <T extends CharSequence> ValueLiteral<CharSequence> from(T value) {
     return new StringLiteral(value);
   }
 
-  static ValueLiteral<ByteBuffer> from(byte[] value) {
+  /**
+   * Create a {@link ValueLiteral} from an array of bytes.
+   *
+   * @param value a byte array
+   * @return a {@link ValueLiteral<ByteBuffer>} for the given value
+   */
+  public static ValueLiteral<ByteBuffer> from(byte[] value) {
     return new FixedLiteral(ByteBuffer.wrap(value));
   }
 
   /**
-   * Create a {@link Literal} from an Object.
+   * Create a {@link ValueLiteral} from an Object.
    *
    * @param value a value
    * @param <T> Java type of value
-   * @return a Literal for the given value
+   * @return a {@link ValueLiteral} for the given value
    */
   @SuppressWarnings("unchecked")
-  static <T> ValueLiteral<T> from(T value) {
+  public static <T> ValueLiteral<T> from(T value) {
     Preconditions.checkNotNull(value, "Cannot create expression literal from null");
 
     if (value instanceof Boolean) {

@@ -16,8 +16,6 @@
 
 package com.netflix.iceberg.expressions;
 
-import com.google.common.base.Joiner;
-
 import java.util.Collection;
 
 /**

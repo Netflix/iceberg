@@ -28,6 +28,7 @@ import com.netflix.iceberg.avro.Avro;
 import com.netflix.iceberg.avro.AvroSchemaUtil;
 import com.netflix.iceberg.expressions.Expressions;
 import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.Literals;
 import com.netflix.iceberg.hadoop.HadoopTables;
 import com.netflix.iceberg.io.FileAppender;
 import com.netflix.iceberg.parquet.Parquet;
@@ -279,7 +280,7 @@ public class TestFilteredScan {
         "path", location.toString())
     );
 
-    int day = Literal.of("2017-12-21").<Integer>to(Types.DateType.get()).value();
+    int day = Literals.from("2017-12-21").<Integer>to(Types.DateType.get()).value();
     IcebergSource source = new IcebergSource();
     DataSourceReader unfiltered = source.createReader(options);
     Assert.assertEquals("Unfiltered table should created 2 read tasks",
@@ -547,7 +548,7 @@ public class TestFilteredScan {
   }
 
   private static long timestamp(String timestamp) {
-    return Literal.of(timestamp).<Long>to(Types.TimestampType.withZone()).value();
+    return Literals.from(timestamp).<Long>to(Types.TimestampType.withZone()).value();
   }
 
   private static Record record(org.apache.avro.Schema schema, Object... values) {

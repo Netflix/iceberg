@@ -16,7 +16,7 @@
 
 package com.netflix.iceberg.transforms;
 
-import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.Literals;
 import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.types.Types;
 import org.junit.Assert;
@@ -59,7 +59,7 @@ public class TestIdentity {
     Transform<Integer, Integer> identity = Transforms.identity(date);
 
     String dateString = "2017-12-01";
-    ValueLiteral<Integer> d = TestLiterals.from(dateString).to(date);
+    ValueLiteral<Integer> d = Literals.from(dateString).to(date);
 
     Assert.assertEquals("Should produce identical date",
         dateString, identity.toHumanString(d.value()));
@@ -71,7 +71,7 @@ public class TestIdentity {
     Transform<Long, Long> identity = Transforms.identity(time);
 
     String timeString = "10:12:55.038194";
-    ValueLiteral<Long> d = TestLiterals.from(timeString).to(time);
+    ValueLiteral<Long> d = Literals.from(timeString).to(time);
 
     Assert.assertEquals("Should produce identical time",
         timeString, identity.toHumanString(d.value()));
@@ -82,7 +82,7 @@ public class TestIdentity {
     Types.TimestampType timestamptz = Types.TimestampType.withZone();
     Transform<Long, Long> identity = Transforms.identity(timestamptz);
 
-    ValueLiteral<Long> ts = TestLiterals.from("2017-12-01T10:12:55.038194-08:00").to(timestamptz);
+    ValueLiteral<Long> ts = Literals.from("2017-12-01T10:12:55.038194-08:00").to(timestamptz);
 
     // value will always be in UTC
     Assert.assertEquals("Should produce timestamp with time zone adjusted to UTC",
@@ -95,7 +95,7 @@ public class TestIdentity {
     Transform<Long, Long> identity = Transforms.identity(timestamp);
 
     String tsString = "2017-12-01T10:12:55.038194";
-    ValueLiteral<Long> ts = TestLiterals.from(tsString).to(timestamp);
+    ValueLiteral<Long> ts = Literals.from(tsString).to(timestamp);
 
     // value is not changed
     Assert.assertEquals("Should produce identical timestamp without time zone",

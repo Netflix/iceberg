@@ -17,6 +17,8 @@
 package com.netflix.iceberg.spark.data;
 
 import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.Literals;
+import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.types.Types;
 import org.apache.spark.sql.catalyst.util.DateTimeUtils;
 import org.junit.Assert;
@@ -41,7 +43,7 @@ public class TestSparkDateTimes {
   }
 
   public void checkSparkDate(String dateString) {
-    Literal<Integer> date = Literal.of(dateString).to(Types.DateType.get());
+    ValueLiteral<Integer> date = Literals.from(dateString).to(Types.DateType.get());
     String sparkDate = DateTimeUtils.toJavaDate(date.value()).toString();
     System.err.println(dateString + ": " + date.value());
     Assert.assertEquals("Should be the same date (" + date.value() + ")", dateString, sparkDate);
@@ -61,7 +63,7 @@ public class TestSparkDateTimes {
   }
 
   public void checkSparkTimestamp(String timestampString, String sparkRepr) {
-    Literal<Long> ts = Literal.of(timestampString).to(Types.TimestampType.withZone());
+    ValueLiteral<Long> ts = Literals.from(timestampString).to(Types.TimestampType.withZone());
     String sparkTimestamp = DateTimeUtils.timestampToString(ts.value());
     System.err.println(timestampString + ": " + ts.value());
     Assert.assertEquals("Should be the same timestamp (" + ts.value() + ")",

@@ -18,7 +18,7 @@ package com.netflix.iceberg.parquet;
 
 import com.netflix.iceberg.Files;
 import com.netflix.iceberg.Schema;
-import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.Literals;
 import com.netflix.iceberg.io.FileAppender;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.io.OutputFile;
@@ -103,9 +103,9 @@ public class TestMetricsRowGroupFilterTypes {
   private static BlockMetaData ROW_GROUP_METADATA = null;
 
   private static final UUID uuid = UUID.randomUUID();
-  private static final Integer date = (Integer) Literal.of("2018-06-29").to(DateType.get()).value();
-  private static final Long time = (Long) Literal.of("10:02:34.000000").to(TimeType.get()).value();
-  private static final Long timestamp = (Long) Literal.of("2018-06-29T10:02:34.000000")
+  private static final Integer date = (Integer) Literals.from("2018-06-29").to(DateType.get()).value();
+  private static final Long time = (Long) Literals.from("10:02:34.000000").to(TimeType.get()).value();
+  private static final Long timestamp = (Long) Literals.from("2018-06-29T10:02:34.000000")
       .to(TimestampType.withoutZone()).value();
   private static final GenericFixed fixed = new GenericData.Fixed(
       org.apache.avro.Schema.createFixed("_fixed", null, null, 4),

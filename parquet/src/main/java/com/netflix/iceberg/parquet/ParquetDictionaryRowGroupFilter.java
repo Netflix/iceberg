@@ -21,12 +21,8 @@ import com.google.common.base.Preconditions;
 import com.google.common.collect.Maps;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.exceptions.RuntimeIOException;
-import com.netflix.iceberg.expressions.Binder;
-import com.netflix.iceberg.expressions.BoundReference;
-import com.netflix.iceberg.expressions.Expression;
-import com.netflix.iceberg.expressions.ExpressionVisitors;
+import com.netflix.iceberg.expressions.*;
 import com.netflix.iceberg.expressions.ExpressionVisitors.BoundExpressionVisitor;
-import com.netflix.iceberg.expressions.Literal;
 import com.netflix.iceberg.types.Types;
 import com.netflix.iceberg.types.Types.StructType;
 import org.apache.parquet.column.ColumnDescriptor;
@@ -40,10 +36,7 @@ import org.apache.parquet.hadoop.metadata.ColumnChunkMetaData;
 import org.apache.parquet.schema.MessageType;
 import org.apache.parquet.schema.PrimitiveType;
 import java.io.IOException;
-import java.util.Comparator;
-import java.util.HashSet;
-import java.util.Map;
-import java.util.Set;
+import java.util.*;
 import java.util.function.Function;
 
 import static com.netflix.iceberg.expressions.Expressions.rewriteNot;
@@ -156,7 +149,7 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean lt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean lt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -180,7 +173,7 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean ltEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean ltEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -204,7 +197,7 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean gt(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gt(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -228,7 +221,7 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean gtEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean gtEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -252,7 +245,7 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean eq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean eq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -268,7 +261,7 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean notEq(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notEq(BoundReference<T> ref, ValueLiteral<T> lit) {
       Integer id = ref.fieldId();
       Types.NestedField field = struct.field(id);
       Preconditions.checkNotNull(field, "Cannot filter by nested column: %s", schema.findField(id));
@@ -287,12 +280,12 @@ public class ParquetDictionaryRowGroupFilter {
     }
 
     @Override
-    public <T> Boolean in(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean in(BoundReference<T> ref, CollectionLiteral<T> lit) {
       return ROWS_MIGHT_MATCH;
     }
 
     @Override
-    public <T> Boolean notIn(BoundReference<T> ref, Literal<T> lit) {
+    public <T> Boolean notIn(BoundReference<T> ref, CollectionLiteral<T> lit) {
       return ROWS_MIGHT_MATCH;
     }
 
@@ -319,7 +312,7 @@ public class ParquetDictionaryRowGroupFilter {
         throw new RuntimeIOException("Failed to create reader for dictionary page");
       }
 
-      Set<T> dictSet = Sets.newTreeSet(comparator);;
+      Set<T> dictSet = Sets.newTreeSet(comparator);
 
       for (int i=0; i<=dict.getMaxId(); i++) {
         switch (col.getType()) {

@@ -21,6 +21,7 @@ import com.google.common.collect.Lists;
 import com.netflix.iceberg.Schema;
 import com.netflix.iceberg.expressions.Binder;
 import com.netflix.iceberg.expressions.BoundReference;
+import com.netflix.iceberg.expressions.CollectionLiteral;
 import com.netflix.iceberg.expressions.Expression.Operation;
 import com.netflix.iceberg.expressions.ExpressionVisitors;
 import com.netflix.iceberg.types.Types.TimestampType;
@@ -75,6 +76,7 @@ import static com.netflix.iceberg.expressions.Expressions.equal;
 import static com.netflix.iceberg.expressions.Expressions.not;
 import static com.netflix.iceberg.expressions.Expressions.or;
 import static com.netflix.iceberg.expressions.Expressions.predicate;
+import static com.netflix.iceberg.expressions.Expressions.in;
 import static scala.collection.JavaConverters.seqAsJavaListConverter;
 import static scala.collection.JavaConverters.setAsJavaSetConverter;
 
@@ -181,15 +183,17 @@ public class SparkExpressions {
       .put(Cast.class, Transform.DAY)
       .build();
 
+  // TODO: convertNotIn
   private static com.netflix.iceberg.expressions.Expression convertIn(Expression expr,
                                                                       Collection<Object> values) {
     if (expr instanceof Attribute) {
       Attribute attr = (Attribute) expr;
-      com.netflix.iceberg.expressions.Expression converted = alwaysFalse();
-      for (Object item : values) {
-        converted = or(converted, equal(attr.name(), item));
+      
+      if (values.isEmpty()) {
+        return alwaysFalse();
       }
-      return converted;
+      
+      return in(attr.name(), values);
     }
 
     return null;
@@ -298,8 +302,8 @@ public class SparkExpressions {
   }
 
   private static com.netflix.iceberg.expressions.Literal<Long> tsLiteral(long timestampMicros) {
-    return com.netflix.iceberg.expressions.Literal
-        .of(timestampMicros)
+    return com.netflix.iceberg.expressions.Literals
+        .from(timestampMicros)
         .to(TimestampType.withoutZone());
   }
 
@@ -381,50 +385,48 @@ public class SparkExpressions {
 
     @Override
     public <T> Expression lt(BoundReference<T> ref,
-                             com.netflix.iceberg.expressions.Literal<T> lit) {
+                             com.netflix.iceberg.expressions.ValueLiteral<T> lit) {
       return column(ref).lt(lit.value()).expr();
     }
 
     @Override
     public <T> Expression ltEq(BoundReference<T> ref,
-                               com.netflix.iceberg.expressions.Literal<T> lit) {
+                               com.netflix.iceberg.expressions.ValueLiteral<T> lit) {
       return column(ref).leq(lit.value()).expr();
     }
 
     @Override
     public <T> Expression gt(BoundReference<T> ref,
-                             com.netflix.iceberg.expressions.Literal<T> lit) {
+                             com.netflix.iceberg.expressions.ValueLiteral<T> lit) {
       return column(ref).gt(lit.value()).expr();
     }
 
     @Override
     public <T> Expression gtEq(BoundReference<T> ref,
-                               com.netflix.iceberg.expressions.Literal<T> lit) {
+                               com.netflix.iceberg.expressions.ValueLiteral<T> lit) {
       return column(ref).geq(lit.value()).expr();
     }
 
     @Override
     public <T> Expression eq(BoundReference<T> ref,
-                             com.netflix.iceberg.expressions.Literal<T> lit) {
+                             com.netflix.iceberg.expressions.ValueLiteral<T> lit) {
       return column(ref).equalTo(lit.value()).expr();
     }
 
     @Override
     public <T> Expression notEq(BoundReference<T> ref,
-                                com.netflix.iceberg.expressions.Literal<T> lit) {
+                                com.netflix.iceberg.expressions.ValueLiteral<T> lit) {
       return column(ref).notEqual(lit.value()).expr();
     }
 
     @Override
-    public <T> Expression in(BoundReference<T> ref,
-                             com.netflix.iceberg.expressions.Literal<T> lit) {
-      throw new UnsupportedOperationException("Not implemented: in");
+    public <T> Expression in(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      return column(ref).isin(lit.values()).expr();
     }
 
     @Override
-    public <T> Expression notIn(BoundReference<T> ref,
-                                com.netflix.iceberg.expressions.Literal<T> lit) {
-      throw new UnsupportedOperationException("Not implemented: notIn");
+    public <T> Expression notIn(BoundReference<T> ref, CollectionLiteral<T> lit) {
+      return not(column(ref).isin(lit.values()).expr());
     }
 
     private Column column(BoundReference ref) {

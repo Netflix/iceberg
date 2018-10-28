@@ -16,7 +16,8 @@
 
 package com.netflix.iceberg.parquet;
 
-import com.netflix.iceberg.expressions.Literal;
+import com.netflix.iceberg.expressions.Literals;
+import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.types.Type;
 import com.netflix.iceberg.types.Types;
 import org.apache.commons.io.Charsets;
@@ -33,32 +34,32 @@ class ParquetConversions {
   private ParquetConversions() {
   }
 
-  static <T> Literal<T> fromParquetPrimitive(Type type, Object value) {
+  static <T> ValueLiteral<T> fromParquetPrimitive(Type type, Object value) {
     if (value instanceof Boolean) {
-      return Literal.of((Boolean) value).to(type);
+      return Literals.from((Boolean) value).to(type);
     } else if (value instanceof Integer) {
-      return Literal.of((Integer) value).to(type);
+      return Literals.from((Integer) value).to(type);
     } else if (value instanceof Long) {
-      return Literal.of((Long) value).to(type);
+      return Literals.from((Long) value).to(type);
     } else if (value instanceof Float) {
-      return Literal.of((Float) value).to(type);
+      return Literals.from((Float) value).to(type);
     } else if (value instanceof Double) {
-      return Literal.of((Double) value).to(type);
+      return Literals.from((Double) value).to(type);
     } else if (value instanceof Binary) {
       switch (type.typeId()) {
         case STRING:
-          return Literal.of(Charsets.UTF_8.decode(((Binary) value).toByteBuffer())).to(type);
+          return Literals.from(Charsets.UTF_8.decode(((Binary) value).toByteBuffer())).to(type);
         case UUID:
           ByteBuffer buffer = ((Binary) value).toByteBuffer().order(ByteOrder.BIG_ENDIAN);
           long mostSigBits = buffer.getLong();
           long leastSigBits = buffer.getLong();
-          return Literal.of(new UUID(mostSigBits, leastSigBits)).to(type);
+          return Literals.from(new UUID(mostSigBits, leastSigBits)).to(type);
         case FIXED:
         case BINARY:
-          return Literal.of(((Binary) value).toByteBuffer()).to(type);
+          return Literals.from(((Binary) value).toByteBuffer()).to(type);
         case DECIMAL:
           Types.DecimalType decimal = (Types.DecimalType) type;
-          return Literal.of(
+          return Literals.from(
               new BigDecimal(new BigInteger(((Binary) value).getBytes()), decimal.scale())
           ).to(type);
         default:

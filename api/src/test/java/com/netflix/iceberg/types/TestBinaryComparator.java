@@ -17,7 +17,7 @@
 package com.netflix.iceberg.types;
 
 import com.netflix.iceberg.expressions.Literal;
-import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.Literals;
 import org.junit.Assert;
 import org.junit.Test;
 import java.nio.ByteBuffer;
@@ -37,7 +37,7 @@ public class TestBinaryComparator {
     ByteBuffer b1 = ByteBuffer.wrap(new byte[] { 1, 1, 2 });
     ByteBuffer b2 = ByteBuffer.wrap(new byte[] { 1, -1, 2 });
 
-    Comparator<ByteBuffer> cmp = TestLiterals.from(b1).comparator();
+    Comparator<ByteBuffer> cmp = Literals.from(b1).comparator();
 
     Assert.assertTrue("Negative bytes should sort after positive bytes",
         cmp.compare(b1, b2) < 0);
@@ -49,7 +49,7 @@ public class TestBinaryComparator {
     ByteBuffer b1 = ByteBuffer.wrap(new byte[] { 1, 1, 2 });
     ByteBuffer b2 = ByteBuffer.wrap(new byte[] { 1, -1, 2 });
 
-    Literal<ByteBuffer> fixedLit = TestLiterals.from(b1).to(Types.FixedType.ofLength(3));
+    Literal<ByteBuffer> fixedLit = Literals.from(b1).to(Types.FixedType.ofLength(3));
     Comparator<ByteBuffer> cmp = fixedLit.comparator();
 
     Assert.assertTrue("Negative bytes should sort after positive bytes",
@@ -60,7 +60,7 @@ public class TestBinaryComparator {
   public void testNullHandling() {
     ByteBuffer buf = ByteBuffer.allocate(0);
 
-    Comparator<ByteBuffer> cmp = TestLiterals.from(buf).comparator();
+    Comparator<ByteBuffer> cmp = Literals.from(buf).comparator();
     Assert.assertTrue("null comes before non-null", cmp.compare(null, buf) < 0);
     Assert.assertTrue("null comes before non-null", cmp.compare(buf, null) > 0);
     Assert.assertEquals("null equals null", 0, cmp.compare(null, null));

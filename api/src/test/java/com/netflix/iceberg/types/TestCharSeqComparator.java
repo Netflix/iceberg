@@ -16,8 +16,7 @@
 
 package com.netflix.iceberg.types;
 
-import com.netflix.iceberg.expressions.Literal;
-import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.Literals;
 import org.apache.avro.util.Utf8;
 import org.junit.Assert;
 import org.junit.Test;
@@ -36,11 +35,11 @@ public class TestCharSeqComparator {
     String s1 = "abc";
     Utf8 s2 = new Utf8("abc");
 
-    Comparator<CharSequence> stringComp = TestLiterals.from(s1).comparator();
+    Comparator<CharSequence> stringComp = Literals.from(s1).comparator();
     Assert.assertEquals("Should consider String and Utf8 equal",
         0, stringComp.compare(s1, s2));
 
-    Comparator<CharSequence> utf8Comp = TestLiterals.from(s2).comparator();
+    Comparator<CharSequence> utf8Comp = Literals.from(s2).comparator();
     Assert.assertEquals("Should consider String and Utf8 equal",
         0, utf8Comp.compare(s1, s2));
   }
@@ -50,7 +49,7 @@ public class TestCharSeqComparator {
     String s1 = "abc";
     String s2 = "abcd";
 
-    Comparator<CharSequence> cmp = TestLiterals.from(s1).comparator();
+    Comparator<CharSequence> cmp = Literals.from(s1).comparator();
 
     // Sanity check that String.compareTo gives the same result
     Assert.assertTrue("When one string is a substring of the other, the longer is greater",
@@ -71,7 +70,7 @@ public class TestCharSeqComparator {
     String s1 = "adc";
     String s2 = "abcd";
 
-    Comparator<CharSequence> cmp = TestLiterals.from(s1).comparator();
+    Comparator<CharSequence> cmp = Literals.from(s1).comparator();
 
     // Sanity check that String.compareTo gives the same result
     Assert.assertTrue("First difference takes precedence over length",
@@ -90,7 +89,7 @@ public class TestCharSeqComparator {
   public void testNullHandling() {
     String s1 = "abc";
 
-    Comparator<CharSequence> cmp = TestLiterals.from(s1).comparator();
+    Comparator<CharSequence> cmp = Literals.from(s1).comparator();
     Assert.assertTrue("null comes before non-null", cmp.compare(null, s1) < 0);
     Assert.assertTrue("null comes before non-null", cmp.compare(s1, null) > 0);
     Assert.assertEquals("null equals null", 0, cmp.compare(null, null));

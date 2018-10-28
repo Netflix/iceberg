@@ -16,7 +16,7 @@
 
 package com.netflix.iceberg.transforms;
 
-import com.netflix.iceberg.expressions.TestLiterals;
+import com.netflix.iceberg.expressions.Literals;
 import com.netflix.iceberg.expressions.ValueLiteral;
 import com.netflix.iceberg.types.Types;
 import org.junit.Assert;
@@ -26,7 +26,7 @@ public class TestDates {
   @Test
   public void testDateToHumanString() {
     Types.DateType type = Types.DateType.get();
-    ValueLiteral<Integer> date = TestLiterals.from("2017-12-01").to(type);
+    ValueLiteral<Integer> date = Literals.from("2017-12-01").to(type);
 
     Transform<Integer, Integer> year = Transforms.year(type);
     Assert.assertEquals("Should produce the correct Human string",

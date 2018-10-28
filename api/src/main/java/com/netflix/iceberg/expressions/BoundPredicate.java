@@ -22,7 +22,7 @@ package com.netflix.iceberg.expressions;
  * @param <T> The type of values in the field
  * @param <L> The type of {@link Literal} used for comparison
  */
-public abstract class BoundPredicate<T, L extends Literal> extends Predicate<BoundReference<T>, L> {
+public abstract class BoundPredicate<T, L extends Literal<T>> extends Predicate<BoundReference<T>, L> {
   BoundPredicate(Operation op, BoundReference<T> ref, L lit) {
     super(op, ref, lit);
   }

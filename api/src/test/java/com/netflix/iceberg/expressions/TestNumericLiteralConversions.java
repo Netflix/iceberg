@@ -24,7 +24,7 @@ import java.math.BigDecimal;
 public class TestNumericLiteralConversions {
   @Test
   public void testIntegerToLongConversion() {
-    ValueLiteral<Integer> lit = Literals.from(34);
+    ValueLiteral<Integer> lit = com.netflix.iceberg.expressions.Literals.from(34);
     ValueLiteral<Long> longLit = lit.to(Types.LongType.get());
 
     Assert.assertEquals("Value should match", 34L, (long) longLit.value());
@@ -32,7 +32,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testIntegerToFloatConversion() {
-    ValueLiteral<Integer> lit = TestLiterals.from(34);
+    ValueLiteral<Integer> lit = Literals.from(34);
     ValueLiteral<Float> floatLit = lit.to(Types.FloatType.get());
 
     Assert.assertEquals("Value should match", 34.0F, floatLit.value(), 0.0000000001D);
@@ -40,7 +40,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testIntegerToDoubleConversion() {
-    ValueLiteral<Integer> lit = TestLiterals.from(34);
+    ValueLiteral<Integer> lit = Literals.from(34);
     ValueLiteral<Double> doubleLit = lit.to(Types.DoubleType.get());
 
     Assert.assertEquals("Value should match", 34.0D, doubleLit.value(), 0.0000000001D);
@@ -48,7 +48,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testIntegerToDecimalConversion() {
-    ValueLiteral<Integer> lit = TestLiterals.from(34);
+    ValueLiteral<Integer> lit = Literals.from(34);
 
     Assert.assertEquals("Value should match",
         new BigDecimal("34"), lit.to(Types.DecimalType.of(9, 0)).value());
@@ -60,20 +60,20 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testLongToIntegerConversion() {
-    ValueLiteral<Long> lit = TestLiterals.from(34L);
+    ValueLiteral<Long> lit = Literals.from(34L);
     ValueLiteral<Integer> intLit = lit.to(Types.IntegerType.get());
 
     Assert.assertEquals("Value should match", 34, (int) intLit.value());
 
     Assert.assertEquals("Values above Integer.MAX_VALUE should be Literals.aboveMax()",
-        Literals.aboveMax(), TestLiterals.from((long) Integer.MAX_VALUE + 1L).to(Types.IntegerType.get()));
+        com.netflix.iceberg.expressions.Literals.aboveMax(), Literals.from((long) Integer.MAX_VALUE + 1L).to(Types.IntegerType.get()));
     Assert.assertEquals("Values below Integer.MIN_VALUE should be Literals.belowMin()",
-        Literals.belowMin(), TestLiterals.from((long) Integer.MIN_VALUE - 1L).to(Types.IntegerType.get()));
+        com.netflix.iceberg.expressions.Literals.belowMin(), Literals.from((long) Integer.MIN_VALUE - 1L).to(Types.IntegerType.get()));
   }
 
   @Test
   public void testLongToFloatConversion() {
-    ValueLiteral<Long> lit = TestLiterals.from(34L);
+    ValueLiteral<Long> lit = Literals.from(34L);
     ValueLiteral<Float> floatLit = lit.to(Types.FloatType.get());
 
     Assert.assertEquals("Value should match", 34.0F, floatLit.value(), 0.0000000001D);
@@ -81,7 +81,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testLongToDoubleConversion() {
-    ValueLiteral<Long> lit = TestLiterals.from(34L);
+    ValueLiteral<Long> lit = Literals.from(34L);
     ValueLiteral<Double> doubleLit = lit.to(Types.DoubleType.get());
 
     Assert.assertEquals("Value should match", 34.0D, doubleLit.value(), 0.0000000001D);
@@ -89,7 +89,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testLongToDecimalConversion() {
-    ValueLiteral<Long> lit = TestLiterals.from(34L);
+    ValueLiteral<Long> lit = Literals.from(34L);
 
     Assert.assertEquals("Value should match",
         new BigDecimal("34"), lit.to(Types.DecimalType.of(9, 0)).value());
@@ -101,7 +101,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testFloatToDoubleConversion() {
-    ValueLiteral<Float> lit = TestLiterals.from(34.56F);
+    ValueLiteral<Float> lit = Literals.from(34.56F);
     ValueLiteral<Double> doubleLit = lit.to(Types.DoubleType.get());
 
     Assert.assertEquals("Value should match", 34.56D, doubleLit.value(), 0.001D);
@@ -109,7 +109,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testFloatToDecimalConversion() {
-    ValueLiteral<Float> lit = TestLiterals.from(34.56F);
+    ValueLiteral<Float> lit = Literals.from(34.56F);
 
     Assert.assertEquals("Value should round using HALF_UP",
         new BigDecimal("34.6"), lit.to(Types.DecimalType.of(9, 1)).value());
@@ -121,7 +121,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testDoubleToFloatConversion() {
-    ValueLiteral<Double> lit = TestLiterals.from(34.56D);
+    ValueLiteral<Double> lit = Literals.from(34.56D);
     ValueLiteral<Float> doubleLit = lit.to(Types.FloatType.get());
 
     Assert.assertEquals("Value should match", 34.56F, doubleLit.value(), 0.001D);
@@ -129,14 +129,14 @@ public class TestNumericLiteralConversions {
     // this adjusts Float.MAX_VALUE using multipliers because most integer adjustments are lost by
     // floating point precision.
     Assert.assertEquals("Values above Float.MAX_VALUE should be Literals.aboveMax()",
-        Literals.aboveMax(), TestLiterals.from(2 * ((double) Float.MAX_VALUE)).to(Types.FloatType.get()));
+        com.netflix.iceberg.expressions.Literals.aboveMax(), Literals.from(2 * ((double) Float.MAX_VALUE)).to(Types.FloatType.get()));
     Assert.assertEquals("Values below Float.MIN_VALUE should be Literals.belowMin()",
-        Literals.belowMin(), TestLiterals.from(-2 * ((double) Float.MAX_VALUE)).to(Types.FloatType.get()));
+        com.netflix.iceberg.expressions.Literals.belowMin(), Literals.from(-2 * ((double) Float.MAX_VALUE)).to(Types.FloatType.get()));
   }
 
   @Test
   public void testDoubleToDecimalConversion() {
-    ValueLiteral<Double> lit = TestLiterals.from(34.56D);
+    ValueLiteral<Double> lit = Literals.from(34.56D);
 
     Assert.assertEquals("Value should round using HALF_UP",
         new BigDecimal("34.6"), lit.to(Types.DecimalType.of(9, 1)).value());
@@ -148,7 +148,7 @@ public class TestNumericLiteralConversions {
 
   @Test
   public void testDecimalToDecimalConversion() {
-    ValueLiteral<BigDecimal> lit = TestLiterals.from(new BigDecimal("34.11"));
+    ValueLiteral<BigDecimal> lit = Literals.from(new BigDecimal("34.11"));
 
     Assert.assertSame("Should return identical object when converting to same scale",
         lit, lit.to(Types.DecimalType.of(9, 2)));

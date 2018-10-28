@@ -17,14 +17,9 @@
 package com.netflix.iceberg.parquet;
 
 import com.netflix.iceberg.Schema;
-import com.netflix.iceberg.expressions.BoundPredicate;
-import com.netflix.iceberg.expressions.BoundReference;
-import com.netflix.iceberg.expressions.Expression;
+import com.netflix.iceberg.expressions.*;
 import com.netflix.iceberg.expressions.Expression.Operation;
 import com.netflix.iceberg.expressions.ExpressionVisitors.ExpressionVisitor;
-import com.netflix.iceberg.expressions.Expressions;
-import com.netflix.iceberg.expressions.Literal;
-import com.netflix.iceberg.expressions.UnboundPredicate;
 import com.netflix.iceberg.types.Types;
 import org.apache.parquet.filter2.compat.FilterCompat;
 import org.apache.parquet.filter2.predicate.FilterApi;
@@ -33,6 +28,10 @@ import org.apache.parquet.filter2.predicate.Operators;
 import org.apache.parquet.io.api.Binary;
 
 import java.nio.ByteBuffer;
+import java.util.Collection;
+import java.util.List;
+import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import static com.netflix.iceberg.expressions.ExpressionVisitors.visit;
 
@@ -112,10 +111,10 @@ class ParquetFilters {
     }
 
     @Override
-    public <T> FilterPredicate predicate(BoundPredicate<T> pred) {
-      Operation op = pred.op();
-      BoundReference<T> ref = pred.ref();
-      Literal<T> lit = pred.literal();
+    public <T> FilterPredicate predicate(BoundPredicate<T, ?> predicate) {
+      Operation op = predicate.op();
+      BoundReference<T> ref = predicate.ref();
+      Literal<T> lit = predicate.literal();
       String path = schema.idToAlias(ref.fieldId());
 
       switch (ref.type().typeId()) {
@@ -129,44 +128,44 @@ class ParquetFilters {
           }
 
         case INTEGER:
-          return pred(op, FilterApi.intColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.intColumn(path));
         case LONG:
-          return pred(op, FilterApi.longColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.longColumn(path));
         case FLOAT:
-          return pred(op, FilterApi.floatColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.floatColumn(path));
         case DOUBLE:
-          return pred(op, FilterApi.doubleColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.doubleColumn(path));
         case DATE:
-          return pred(op, FilterApi.intColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.intColumn(path));
         case TIME:
-          return pred(op, FilterApi.longColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.longColumn(path));
         case TIMESTAMP:
-          return pred(op, FilterApi.longColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.longColumn(path));
         case STRING:
-          return pred(op, FilterApi.binaryColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.binaryColumn(path));
         case UUID:
-          return pred(op, FilterApi.binaryColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.binaryColumn(path));
         case FIXED:
-          return pred(op, FilterApi.binaryColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.binaryColumn(path));
         case BINARY:
-          return pred(op, FilterApi.binaryColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.binaryColumn(path));
         case DECIMAL:
-          return pred(op, FilterApi.binaryColumn(path), getParquetPrimitive(lit));
+          return pred(predicate, FilterApi.binaryColumn(path));
       }
 
-      throw new UnsupportedOperationException("Cannot convert to Parquet filter: " + pred);
+      throw new UnsupportedOperationException("Cannot convert to Parquet filter: " + predicate);
     }
 
-    protected Expression bind(UnboundPredicate<?> pred) {
+    protected Expression bind(UnboundPredicate<?, ?> pred) {
       return pred.bind(schema.asStruct());
     }
 
     @Override
     @SuppressWarnings("unchecked")
-    public <T> FilterPredicate predicate(UnboundPredicate<T> pred) {
+    public <T> FilterPredicate predicate(UnboundPredicate<T, ?> pred) {
       Expression bound = bind(pred);
       if (bound instanceof BoundPredicate) {
-        return predicate((BoundPredicate<?>) bound);
+        return predicate((BoundPredicate<?, ?>) bound);
       } else if (bound == Expressions.alwaysTrue()) {
         return AlwaysTrue.INSTANCE;
       } else if (bound == Expressions.alwaysFalse()) {
@@ -184,7 +183,7 @@ class ParquetFilters {
       this.partitionStruct = schema.findField(column).type().asNestedType().asStructType();
     }
 
-    protected Expression bind(UnboundPredicate<?> pred) {
+    protected Expression bind(UnboundPredicate<?, ?> pred) {
       // instead of binding the predicate using the top-level schema, bind it to the partition data
       return pred.bind(partitionStruct);
     }
@@ -192,12 +191,45 @@ class ParquetFilters {
 
   private static
   <C extends Comparable<C>, COL extends Operators.Column<C> & Operators.SupportsLtGt>
-  FilterPredicate pred(Operation op, COL col, C value) {
+  FilterPredicate pred(BoundPredicate<?, ?> predicate, COL col) {
+    if (predicate instanceof BoundUnaryPredicate) {
+      return pred(predicate.op(), col);
+    }
+
+    if (predicate instanceof BoundValuePredicate) {
+      ValueLiteral<?> literal = ((BoundValuePredicate<?>) predicate).literal();
+      return pred(predicate.op(), col, ParquetFilters.<C>getParquetPrimitive(literal.value()));
+    }
+    
+    if (predicate instanceof BoundCollectionPredicate) {
+      CollectionLiteral<?> literal = ((BoundCollectionPredicate<?>) predicate).literal();
+      Collection<C> values = literal.values().stream()
+        .map(ParquetFilters::<C>getParquetPrimitive)
+        .collect(Collectors.toList());
+      return pred(predicate.op(), col, values);
+    }
+
+    throw new UnsupportedOperationException("Unsupported type of bound predicate: " + predicate.getClass().getName());
+  }
+
+  private static
+    <C extends Comparable<C>, COL extends Operators.Column<C> & Operators.SupportsEqNotEq>
+    FilterPredicate pred(Operation op, COL col) {
+
     switch (op) {
       case IS_NULL:
         return FilterApi.eq(col, null);
       case NOT_NULL:
         return FilterApi.notEq(col, null);
+      default:
+        throw new UnsupportedOperationException("Unsupported unary predicate operation: " + op);
+    }
+  }
+
+  private static
+  <C extends Comparable<C>, COL extends Operators.Column<C> & Operators.SupportsLtGt>
+  FilterPredicate pred(Operation op, COL col, C value) {
+    switch (op) {
       case EQ:
         return FilterApi.eq(col, value);
       case NOT_EQ:
@@ -211,27 +243,43 @@ class ParquetFilters {
       case LT_EQ:
         return FilterApi.ltEq(col, value);
       default:
-        throw new UnsupportedOperationException("Unsupported predicate operation: " + op);
+        throw new UnsupportedOperationException("Unsupported value predicate operation: " + op);
+    }
+  }
+
+  private static
+  <C extends Comparable<C>, COL extends Operators.Column<C> & Operators.SupportsLtGt>
+  FilterPredicate pred(Operation op, COL col, Collection<C> values) {
+    switch (op) {
+      case IN:
+        return values.stream()
+          .map(value -> (FilterPredicate)FilterApi.eq(col, value))
+          .reduce(FilterApi::or)
+          .orElse(AlwaysFalse.INSTANCE);
+      case NOT_IN:
+        return FilterApi.not(
+          values.stream()
+            .map(value -> (FilterPredicate) FilterApi.eq(col, value))
+            .reduce(FilterApi::or)
+            .orElse(AlwaysFalse.INSTANCE)
+        );
+      default:
+        throw new UnsupportedOperationException("Unsupported collection predicate operation: " + op);
     }
   }
 
   @SuppressWarnings("unchecked")
-  private static <C extends Comparable<C>> C getParquetPrimitive(Literal<?> lit) {
-    if (lit == null) {
-      return null;
-    }
-
+  private static <C extends Comparable<C>> C getParquetPrimitive(Object value) {
     // TODO: this needs to convert to handle BigDecimal and UUID
-    Object value = lit.value();
     if (value instanceof Number) {
-      return (C) lit.value();
+      return (C) value;
     } else if (value instanceof CharSequence) {
       return (C) Binary.fromString(value.toString());
     } else if (value instanceof ByteBuffer) {
       return (C) Binary.fromReusedByteBuffer((ByteBuffer) value);
     }
     throw new UnsupportedOperationException(
-        "Type not supported yet: " + value.getClass().getName());
+      "Type not supported yet: " + value.getClass().getName());
   }
 
   private static class AlwaysTrue implements FilterPredicate {

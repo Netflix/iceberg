@@ -27,20 +27,20 @@ public class TestLiteralSerialization {
   @Test
   public void testLiterals() throws Exception {
     ValueLiteral[] literals = new ValueLiteral[] {
-        TestLiterals.from(false),
-        TestLiterals.from(34),
-        TestLiterals.from(35L),
-        TestLiterals.from(36.75F),
-        TestLiterals.from(8.75D),
-        TestLiterals.from("2017-11-29").to(Types.DateType.get()),
-        TestLiterals.from("11:30:07").to(Types.TimeType.get()),
-        TestLiterals.from("2017-11-29T11:30:07.123").to(Types.TimestampType.withoutZone()),
-        TestLiterals.from("2017-11-29T11:30:07.123+01:00").to(Types.TimestampType.withZone()),
-        TestLiterals.from("abc"),
-        TestLiterals.from(UUID.randomUUID()),
-        TestLiterals.from(new byte[] { 1, 2, 3 }).to(Types.FixedType.ofLength(3)),
-        TestLiterals.from(new byte[] { 3, 4, 5, 6 }).to(Types.BinaryType.get()),
-        TestLiterals.from(new BigDecimal("122.50")),
+        Literals.from(false),
+        Literals.from(34),
+        Literals.from(35L),
+        Literals.from(36.75F),
+        Literals.from(8.75D),
+        Literals.from("2017-11-29").to(Types.DateType.get()),
+        Literals.from("11:30:07").to(Types.TimeType.get()),
+        Literals.from("2017-11-29T11:30:07.123").to(Types.TimestampType.withoutZone()),
+        Literals.from("2017-11-29T11:30:07.123+01:00").to(Types.TimestampType.withZone()),
+        Literals.from("abc"),
+        Literals.from(UUID.randomUUID()),
+        Literals.from(new byte[] { 1, 2, 3 }).to(Types.FixedType.ofLength(3)),
+        Literals.from(new byte[] { 3, 4, 5, 6 }).to(Types.BinaryType.get()),
+        Literals.from(new BigDecimal("122.50")),
     };
 
     for (ValueLiteral<?> lit : literals) {
