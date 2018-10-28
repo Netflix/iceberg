@@ -34,6 +34,7 @@ public abstract class BaseReplaceFiles extends SnapshotUpdate {
   private final AtomicInteger manifestCount = new AtomicInteger(0);
 
   protected Set<DataFile> filesToAdd = new HashSet<>();
+  protected Set<String> pathsToDelete = new HashSet<>();
   protected boolean hasNewFiles;
 
   public BaseReplaceFiles(TableOperations ops) {
@@ -70,39 +71,43 @@ public abstract class BaseReplaceFiles extends SnapshotUpdate {
       .throwFailureWhenFinished()
       .executeWith(ThreadPools.getWorkerPool())
       .run(manifest -> {
-        try (ManifestReader reader = ManifestReader.read(ops.newInputFile(manifest))) {
-          final OutputFile manifestPath = manifestPath(manifestCount.getAndIncrement());
-          try (ManifestWriter writer = new ManifestWriter(reader.spec(), manifestPath, snapshotId())) {
-            boolean hasDeletes = false;
-            final Iterable<ManifestEntry> notDeletedManifestEntries = notDeletedManifestEntries(reader);
-            for (ManifestEntry manifestEntry : notDeletedManifestEntries) {
-              if (shouldDelete(reader.spec()).test(manifestEntry)) {
-                hasDeletes = true;
-                writer.delete(manifestEntry);
-                final String deletedPath = manifestEntry.file().path().toString();
-                if(deletedFiles.contains(deletedPath)) {
-                  LOG.warn(String.format("Deleting a duplicated path %s from manifest %s", deletedPath, manifest));
+        if(!deletedFiles.equals(pathsToDelete)) {
+          try (ManifestReader reader = ManifestReader.read(ops.newInputFile(manifest))) {
+            final OutputFile manifestPath = manifestPath(manifestCount.getAndIncrement());
+            try (ManifestWriter writer = new ManifestWriter(reader.spec(), manifestPath, snapshotId())) {
+              boolean hasDeletes = false;
+              final Iterable<ManifestEntry> notDeletedManifestEntries = notDeletedManifestEntries(reader);
+              for (ManifestEntry manifestEntry : notDeletedManifestEntries) {
+                if (shouldDelete(reader.spec()).test(manifestEntry)) {
+                  hasDeletes = true;
+                  writer.delete(manifestEntry);
+                  final String deletedPath = manifestEntry.file().path().toString();
+                  if(deletedFiles.contains(deletedPath)) {
+                    LOG.warn(String.format("Deleting a duplicated path %s from manifest %s", deletedPath, manifest));
+                  }
+                  deletedFiles.add(deletedPath);
+                } else {
+                  writer.addExisting(manifestEntry);
                 }
-                deletedFiles.add(deletedPath);
-              } else {
-                writer.addExisting(manifestEntry);
               }
-            }
 
-            if (hasDeletes) {
-              this.manifestFiles.add(manifestPath.location());
-            } else {
-              this.manifestFiles.add(manifest);
+              if (hasDeletes) {
+                this.manifestFiles.add(manifestPath.location());
+              } else {
+                this.manifestFiles.add(manifest);
+              }
+            } catch (IOException e) {
+              throw new RuntimeIOException(e);
+            } finally {
+              newManifests.add(manifestPath.location());
             }
           } catch (IOException e) {
             throw new RuntimeIOException(e);
-          } finally {
-            newManifests.add(manifestPath.location());
           }
-        } catch (IOException e) {
-          throw new RuntimeIOException(e);
-        }
-      });
+      } else {
+        this.manifestFiles.add(manifest);
+      }
+    });
 
     addFiles(base.spec());
     return this.manifestFiles.stream().collect(Collectors.toList());
