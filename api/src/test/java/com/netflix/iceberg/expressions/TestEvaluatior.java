@@ -27,7 +27,7 @@ import org.junit.Test;
 import static com.netflix.iceberg.expressions.Expressions.alwaysFalse;
 import static com.netflix.iceberg.expressions.Expressions.alwaysTrue;
 import static com.netflix.iceberg.expressions.Expressions.and;
-import static com.netflix.iceberg.expressions.Expressions.startWith;
+import static com.netflix.iceberg.expressions.Expressions.startsWith;
 import static com.netflix.iceberg.expressions.Expressions.equal;
 import static com.netflix.iceberg.expressions.Expressions.greaterThan;
 import static com.netflix.iceberg.expressions.Expressions.greaterThanOrEqual;
@@ -155,22 +155,20 @@ public class TestEvaluatior {
   }
 
   @Test
-  public void testStartWith() {
+  public void testStartsWith() {
     StructType struct = StructType.of(required(3, "s", Types.StringType.get()));
-    Evaluator evaluator = new Evaluator(struct, startWith("s", "abc"));
-    Assert.assertTrue("startWith(abcdddd, abc)  => true",
+    Evaluator evaluator = new Evaluator(struct, startsWith("s", "abc"));
+    Assert.assertTrue("startsWith(abcdddd, abc)  => true",
         evaluator.eval(TestHelpers.Row.of(("abcdddd"))));
 
-    Assert.assertFalse("startWith(xyzffff, abc)  => false",
+    Assert.assertFalse("startsWith(xyzffff, abc)  => false",
         evaluator.eval(TestHelpers.Row.of(("xyzffff"))));
-
   }
 
   @Test(expected = ValidationException.class)
   public void testStartsWithThrowsOnNotString() {
     StructType struct = StructType.of(required(3, "s", Types.IntegerType.get()));
-    Evaluator evaluator = new Evaluator(struct, startWith("s", 112));
+    Evaluator evaluator = new Evaluator(struct, startsWith("s", 112));
     evaluator.eval(TestHelpers.Row.of(("xyzffff")));
-
   }
 }

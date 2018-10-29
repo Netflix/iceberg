@@ -121,7 +121,7 @@ public class ExpressionVisitors {
 //          due to the fact that startWith function in Expressions accepts only string types casting is a must here.
 //          in  Unbound#bind function we added a check for that
 
-          return startsWith((BoundReference<String>) pred.ref(), pred.literal().to(pred.ref().type()));
+          return startsWith((BoundReference<String>) pred.ref(), (Literal<String>) pred.literal());
         default:
           throw new UnsupportedOperationException(
               "Unknown operation for predicate: " + pred.op());

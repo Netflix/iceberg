@@ -96,7 +96,7 @@ public class Expressions {
     return new UnboundPredicate<>(Expression.Operation.NOT_EQ, ref(name), value);
   }
 
-  public static <T> UnboundPredicate<T> startWith(String name, T value) {
+  public static <T> UnboundPredicate<T> startsWith(String name, T value) {
     return new UnboundPredicate<>(Operation.STARTS_WITH, ref(name), value);
   }
 
