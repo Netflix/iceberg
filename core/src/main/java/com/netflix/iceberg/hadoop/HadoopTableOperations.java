@@ -35,6 +35,8 @@ import java.io.IOException;
 import java.io.InputStreamReader;
 import java.util.UUID;
 
+import static com.netflix.iceberg.TableMetadataParser.shouldCompressMetadata;
+
 /**
  * TableOperations implementation for file systems that support atomic rename.
  * <p>
@@ -98,7 +100,7 @@ class HadoopTableOperations implements TableOperations {
       return;
     }
 
-    Path tempMetadataFile = metadataPath(UUID.randomUUID().toString() + ".metadata.json.gz");
+    Path tempMetadataFile = metadataPath(UUID.randomUUID().toString() + ".metadata.json" + (shouldCompressMetadata() ? ".gz" : ""));
     TableMetadataParser.write(metadata, HadoopOutputFile.fromPath(tempMetadataFile, conf));
 
     int nextVersion = (version != null ? version : 0) + 1;
@@ -159,7 +161,7 @@ class HadoopTableOperations implements TableOperations {
   }
 
   private Path metadataFile(int version) {
-    return metadataPath("v" + version + ".metadata.json.gz");
+    return metadataPath("v" + version + ".metadata.json" + (shouldCompressMetadata() ? ".gz" : ""));
   }
 
   private Path metadataPath(String filename) {

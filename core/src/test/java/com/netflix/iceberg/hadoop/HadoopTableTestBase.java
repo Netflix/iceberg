@@ -116,7 +116,7 @@ public class HadoopTableTestBase {
   }
 
   File version(int i) {
-    return new File(metadataDir, "v" + i + ".metadata.json.gz");
+    return new File(metadataDir, "v" + i + ".metadata.json");
   }
 
   TableMetadata readMetadataVersion(int version) {

@@ -54,6 +54,7 @@ public class TableMetadataParser {
   private static final String SNAPSHOT_ID = "snapshot-id";
   private static final String TIMESTAMP_MS = "timestamp-ms";
   private static final String SNAPSHOT_LOG = "snapshot-log";
+  public static final String ICEBERG_COMPRESS_METADATA = "iceberg.compress.metadata";
 
   public static String toJson(TableMetadata metadata) {
     StringWriter writer = new StringWriter();
@@ -68,7 +69,10 @@ public class TableMetadataParser {
   }
 
   public static void write(TableMetadata metadata, OutputFile outputFile) {
-    try (OutputStreamWriter writer = new OutputStreamWriter(new GzipCompressorOutputStream(outputFile.create()))) {
+    try (OutputStreamWriter writer = new OutputStreamWriter(
+            shouldCompressMetadata() ?
+                    new GzipCompressorOutputStream(outputFile.create()) :
+                    outputFile.create())) {
       JsonGenerator generator = JsonUtil.factory().createGenerator(writer);
       generator.useDefaultPrettyPrinter();
       toJson(metadata, generator);
@@ -76,6 +80,10 @@ public class TableMetadataParser {
     } catch (IOException e) {
       throw new RuntimeIOException(e, "Failed to write json to file: %s", outputFile);
     }
+  }
+
+  public static boolean shouldCompressMetadata() {
+    return Boolean.parseBoolean(System.getProperty(ICEBERG_COMPRESS_METADATA, "false"));
   }
 
   private static void toJson(TableMetadata metadata, JsonGenerator generator) throws IOException {

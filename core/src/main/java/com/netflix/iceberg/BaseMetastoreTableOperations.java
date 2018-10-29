@@ -32,6 +32,7 @@ import java.io.IOException;
 import java.util.UUID;
 
 import static com.netflix.iceberg.TableMetadataParser.read;
+import static com.netflix.iceberg.TableMetadataParser.shouldCompressMetadata;
 import static com.netflix.iceberg.hadoop.HadoopInputFile.fromLocation;
 
 
@@ -137,8 +138,12 @@ public abstract class BaseMetastoreTableOperations implements TableOperations {
   }
 
   private static String newTableMetadataFilename(String baseLocation, int newVersion) {
-    return String.format("%s/%s/%05d-%s.metadata.json.gz",
-        baseLocation, METADATA_FOLDER_NAME, newVersion, UUID.randomUUID());
+    return String.format("%s/%s/%05d-%s.metadata.json%s",
+        baseLocation,
+        METADATA_FOLDER_NAME,
+        newVersion,
+        UUID.randomUUID(),
+        shouldCompressMetadata() ? ".gz" : ""  );
   }
 
   private static String newMetadataLocation(String baseLocation, String filename) {
