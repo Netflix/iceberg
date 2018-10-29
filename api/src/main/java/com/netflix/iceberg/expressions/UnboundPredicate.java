@@ -64,7 +64,7 @@ public class UnboundPredicate<T> extends Predicate<T, NamedReference> {
       }
     }
 
-    if(op() == STARTS_WITH && field.type() != Types.StringType.get()) {
+    if (op() == STARTS_WITH && field.type() != Types.StringType.get()) {
       throw new ValidationException("Operation startsWith accepts only strings");
     }
 
