@@ -100,7 +100,7 @@ class HadoopTableOperations implements TableOperations {
       return;
     }
 
-    Path tempMetadataFile = metadataPath(UUID.randomUUID().toString() + getFileExtension());
+    Path tempMetadataFile = metadataPath(UUID.randomUUID().toString() + getFileExtension(conf));
     TableMetadataParser.write(metadata, HadoopOutputFile.fromPath(tempMetadataFile, conf));
 
     int nextVersion = (version != null ? version : 0) + 1;
@@ -161,7 +161,7 @@ class HadoopTableOperations implements TableOperations {
   }
 
   private Path metadataFile(int version) {
-    return metadataPath("v" + version + getFileExtension());
+    return metadataPath("v" + version + getFileExtension(conf));
   }
 
   private Path metadataPath(String filename) {

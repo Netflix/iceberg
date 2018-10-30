@@ -222,7 +222,7 @@ class HiveTableBaseTest {
   }
 
   List<String> metadataVersionFiles(String tableName) {
-    return filterByExtension(tableName, getFileExtension());
+    return filterByExtension(tableName, getFileExtension(hiveConf));
   }
 
   List<String> manifestFiles(String tableName) {

@@ -138,13 +138,13 @@ public abstract class BaseMetastoreTableOperations implements TableOperations {
     return System.currentTimeMillis();
   }
 
-  private static String newTableMetadataFilename(String baseLocation, int newVersion) {
+  private String newTableMetadataFilename(String baseLocation, int newVersion) {
     return String.format("%s/%s/%05d-%s%s",
             baseLocation,
             METADATA_FOLDER_NAME,
             newVersion,
             UUID.randomUUID(),
-            getFileExtension());
+            getFileExtension(this.conf));
   }
 
   private static String newMetadataLocation(String baseLocation, String filename) {

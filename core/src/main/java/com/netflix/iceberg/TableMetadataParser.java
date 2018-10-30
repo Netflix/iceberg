@@ -29,6 +29,7 @@ import com.netflix.iceberg.io.OutputFile;
 import com.netflix.iceberg.util.JsonUtil;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorOutputStream;
+import org.apache.hadoop.conf.Configuration;
 
 import java.io.IOException;
 import java.io.InputStream;
@@ -54,7 +55,6 @@ public class TableMetadataParser {
   private static final String SNAPSHOT_ID = "snapshot-id";
   private static final String TIMESTAMP_MS = "timestamp-ms";
   private static final String SNAPSHOT_LOG = "snapshot-log";
-  public static final String ICEBERG_COMPRESS_METADATA = "iceberg.compress.metadata";
 
   public static String toJson(TableMetadata metadata) {
     StringWriter writer = new StringWriter();
@@ -82,9 +82,8 @@ public class TableMetadataParser {
     }
   }
 
-  public static String getFileExtension() {
-    final boolean shouldCompress = Boolean.parseBoolean(System.getProperty(ICEBERG_COMPRESS_METADATA, "false"));
-    return shouldCompress ? ".metadata.json.gz" : ".metadata.json";
+  public static String getFileExtension(Configuration configuration) {
+    return ConfigProperties.shouldCompress(configuration) ? ".metadata.json.gz" : ".metadata.json";
   }
 
   private static void toJson(TableMetadata metadata, JsonGenerator generator) throws IOException {

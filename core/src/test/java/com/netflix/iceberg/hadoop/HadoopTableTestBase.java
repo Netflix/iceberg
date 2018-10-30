@@ -117,7 +117,7 @@ public class HadoopTableTestBase {
   }
 
   File version(int i) {
-    return new File(metadataDir, "v" + i + getFileExtension());
+    return new File(metadataDir, "v" + i + getFileExtension(new Configuration()));
   }
 
   TableMetadata readMetadataVersion(int version) {
