@@ -17,7 +17,7 @@ package com.netflix.iceberg;
 
 import avro.shaded.com.google.common.collect.Lists;
 import com.netflix.iceberg.io.OutputFile;
-import com.netflix.iceberg.types.Types;
+import com.netflix.iceberg.types.Types.BooleanType;
 import org.apache.commons.compress.compressors.gzip.GzipCompressorInputStream;
 import org.junit.After;
 import org.junit.Assert;
@@ -29,35 +29,42 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.nio.file.Paths;
 
+import static avro.shaded.com.google.common.collect.Lists.newArrayList;
+import static com.netflix.iceberg.PartitionSpec.unpartitioned;
+import static com.netflix.iceberg.TableMetadata.newTableMetadata;
 import static com.netflix.iceberg.TableMetadataParser.ICEBERG_COMPRESS_METADATA;
+import static com.netflix.iceberg.TableMetadataParser.getFileExtension;
+import static com.netflix.iceberg.types.Types.NestedField.optional;
+import static java.lang.Boolean.parseBoolean;
+import static java.lang.System.getProperty;
 
 public class TableMetadataParserTest {
 
-  private final Schema SCHEMA = new Schema(Lists.newArrayList(Types.NestedField.optional(1, "b", Types.BooleanType.get())));
-  private final String LOCAL_UNCOMPORESSED_FILE = "metadata.json";
-  private final String LOCAL_COMPORESSED_FILE = "metadata.json.gz";
-  private final TableMetadata EXPECTED = TableMetadata.newTableMetadata(null, SCHEMA, PartitionSpec.unpartitioned(), "file://tmp/db/table");
-  private final Boolean ICEBERG_COMPRESS_METADATA_PROPERTY = TableMetadataParser.shouldCompressMetadata();
+  private final Schema SCHEMA = new Schema(newArrayList(optional(1, "b", BooleanType.get())));
+  private final TableMetadata EXPECTED = newTableMetadata(null, SCHEMA, unpartitioned(), "file://tmp/db/table");
+  private final Boolean SHOULD_COMPRESS = parseBoolean(getProperty(ICEBERG_COMPRESS_METADATA, "false"));
 
   @Test
   public void testCompressionProperty() throws IOException {
     final boolean[] props = {true, false};
     for (boolean prop : props) {
       System.setProperty(ICEBERG_COMPRESS_METADATA, String.valueOf(prop));
-      String file = prop ? LOCAL_COMPORESSED_FILE: LOCAL_UNCOMPORESSED_FILE;
-      final OutputFile outputFile = Files.localOutput(file);
+      final OutputFile outputFile = Files.localOutput(getFileExtension());
       TableMetadataParser.write(EXPECTED, outputFile);
-      Assert.assertEquals(prop, isCompressed(file));
-      final TableMetadata read = TableMetadataParser.read(null, Files.localInput(new File(file)));
+      Assert.assertEquals(prop, isCompressed(getFileExtension()));
+      final TableMetadata read = TableMetadataParser.read(null, Files.localInput(new File(getFileExtension())));
       verifyMetadata(read);
     }
   }
 
   @After
   public void cleanup() throws IOException {
-    java.nio.file.Files.deleteIfExists(Paths.get(LOCAL_COMPORESSED_FILE));
-    java.nio.file.Files.deleteIfExists(Paths.get(LOCAL_UNCOMPORESSED_FILE));
-    System.setProperty(LOCAL_COMPORESSED_FILE, String.valueOf(ICEBERG_COMPRESS_METADATA_PROPERTY));
+    final boolean[] props = {true, false};
+    for (boolean prop : props) {
+      System.setProperty(ICEBERG_COMPRESS_METADATA, String.valueOf(prop));
+      java.nio.file.Files.deleteIfExists(Paths.get(getFileExtension()));
+    }
+    System.setProperty(ICEBERG_COMPRESS_METADATA, String.valueOf(SHOULD_COMPRESS));
   }
 
   private void verifyMetadata(TableMetadata read) {

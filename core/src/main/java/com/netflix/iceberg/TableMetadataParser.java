@@ -70,7 +70,7 @@ public class TableMetadataParser {
 
   public static void write(TableMetadata metadata, OutputFile outputFile) {
     try (OutputStreamWriter writer = new OutputStreamWriter(
-            shouldCompressMetadata() ?
+            outputFile.location().endsWith(".gz") ?
                     new GzipCompressorOutputStream(outputFile.create()) :
                     outputFile.create())) {
       JsonGenerator generator = JsonUtil.factory().createGenerator(writer);
@@ -82,8 +82,9 @@ public class TableMetadataParser {
     }
   }
 
-  public static boolean shouldCompressMetadata() {
-    return Boolean.parseBoolean(System.getProperty(ICEBERG_COMPRESS_METADATA, "false"));
+  public static String getFileExtension() {
+    final boolean shouldCompress = Boolean.parseBoolean(System.getProperty(ICEBERG_COMPRESS_METADATA, "false"));
+    return shouldCompress ? ".metadata.json.gz" : ".metadata.json";
   }
 
   private static void toJson(TableMetadata metadata, JsonGenerator generator) throws IOException {
