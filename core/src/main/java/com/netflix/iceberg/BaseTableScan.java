@@ -64,18 +64,18 @@ class BaseTableScan implements TableScan {
   private final TableOperations ops;
   private final Table table;
   private final Long snapshotId;
-  private final Collection<String> columns;
+  private final Schema schema;
   private final Expression rowFilter;
 
   BaseTableScan(TableOperations ops, Table table) {
-    this(ops, table, null, Filterable.ALL_COLUMNS, Expressions.alwaysTrue());
+    this(ops, table, null, table.schema(), Expressions.alwaysTrue());
   }
 
-  private BaseTableScan(TableOperations ops, Table table, Long snapshotId, Collection<String> columns, Expression rowFilter) {
+  private BaseTableScan(TableOperations ops, Table table, Long snapshotId, Schema schema, Expression rowFilter) {
     this.ops = ops;
     this.table = table;
     this.snapshotId = snapshotId;
-    this.columns = columns;
+    this.schema = schema;
     this.rowFilter = rowFilter;
   }
 
@@ -90,7 +90,7 @@ class BaseTableScan implements TableScan {
         "Cannot override snapshot, already set to id=%s", snapshotId);
     Preconditions.checkArgument(ops.current().snapshot(snapshotId) != null,
         "Cannot find snapshot with ID %s", snapshotId);
-    return new BaseTableScan(ops, table, snapshotId, columns, rowFilter);
+    return new BaseTableScan(ops, table, snapshotId, schema, rowFilter);
   }
 
   @Override
@@ -113,14 +113,29 @@ class BaseTableScan implements TableScan {
     return useSnapshot(lastSnapshotId);
   }
 
+  public TableScan project(Schema schema) {
+    return new BaseTableScan(ops, table, snapshotId, schema, rowFilter);
+  }
+
   @Override
   public TableScan select(Collection<String> columns) {
-    return new BaseTableScan(ops, table, snapshotId, columns, rowFilter);
+    Set<Integer> requiredFieldIds = Sets.newHashSet();
+
+    // all of the filter columns are required
+    requiredFieldIds.addAll(
+        Binder.boundReferences(table.schema().asStruct(), Collections.singletonList(rowFilter)));
+
+    // all of the projection columns are required
+    requiredFieldIds.addAll(TypeUtil.getProjectedIds(table.schema().select(columns)));
+
+    Schema projection = TypeUtil.select(table.schema(), requiredFieldIds);
+
+    return new BaseTableScan(ops, table, snapshotId, projection, rowFilter);
   }
 
   @Override
   public TableScan filter(Expression expr) {
-    return new BaseTableScan(ops, table, snapshotId, columns, Expressions.and(rowFilter, expr));
+    return new BaseTableScan(ops, table, snapshotId, schema, Expressions.and(rowFilter, expr));
   }
 
   @Override
@@ -180,16 +195,6 @@ class BaseTableScan implements TableScan {
 
   @Override
   public Schema schema() {
-    Set<Integer> requiredFieldIds = Sets.newHashSet();
-
-    // all of the filter columns are required
-    requiredFieldIds.addAll(
-        Binder.boundReferences(table.schema().asStruct(), Collections.singletonList(rowFilter)));
-
-    // all of the projection columns are required
-    requiredFieldIds.addAll(TypeUtil.getProjectedIds(table.schema().select(columns)));
-
-    return TypeUtil.select(table.schema(), requiredFieldIds);
   }
 
   @Override
@@ -201,7 +206,7 @@ class BaseTableScan implements TableScan {
   public String toString() {
     return Objects.toStringHelper(this)
         .add("table", table)
-        .add("columns", columns)
+        .add("projection", schema.asStruct())
         .add("filter", rowFilter)
         .toString();
   }
