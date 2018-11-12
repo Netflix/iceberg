@@ -104,6 +104,14 @@ public interface TableScan {
   CloseableIterable<CombinedScanTask> planTasks();
 
   /**
+   * Returns this scan's required {@link Schema}. This schema includes all fields that are either
+   * projected or used by this scan's filter expression.
+   *
+   * @return this scan's projection schema
+   */
+  Schema schema();
+
+  /**
    * Returns this scan's filter {@link Expression}.
    *
    * @return this scan's filter expression

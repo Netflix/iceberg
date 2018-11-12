@@ -18,14 +18,18 @@ package com.netflix.iceberg;
 
 import com.google.common.base.Objects;
 import com.google.common.base.Preconditions;
+import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Iterables;
+import com.google.common.collect.Sets;
 import com.netflix.iceberg.TableMetadata.SnapshotLogEntry;
 import com.netflix.iceberg.events.Listeners;
 import com.netflix.iceberg.events.ScanEvent;
+import com.netflix.iceberg.expressions.Binder;
 import com.netflix.iceberg.expressions.Expression;
 import com.netflix.iceberg.expressions.Expressions;
 import com.netflix.iceberg.expressions.ResidualEvaluator;
 import com.netflix.iceberg.io.CloseableIterable;
+import com.netflix.iceberg.types.TypeUtil;
 import com.netflix.iceberg.util.BinPacking;
 import com.netflix.iceberg.util.ParallelIterable;
 import org.slf4j.Logger;
@@ -33,7 +37,10 @@ import org.slf4j.LoggerFactory;
 import java.io.Closeable;
 import java.text.SimpleDateFormat;
 import java.util.Collection;
+import java.util.Collections;
 import java.util.Date;
+import java.util.List;
+import java.util.Set;
 import java.util.concurrent.ConcurrentLinkedQueue;
 
 import static com.netflix.iceberg.util.ThreadPools.getPlannerPool;
@@ -43,8 +50,14 @@ import static com.netflix.iceberg.util.ThreadPools.getWorkerPool;
  * Base class for {@link TableScan} implementations.
  */
 class BaseTableScan implements TableScan {
-  private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
   private static final Logger LOG = LoggerFactory.getLogger(TableScan.class);
+
+  private static final SimpleDateFormat DATE_FORMAT = new SimpleDateFormat("yyyy-MM-dd HH:mm:ss.SSS");
+  private static final List<String> SNAPSHOT_COLUMNS = ImmutableList.of(
+      "snapshot_id", "file_path", "file_ordinal", "file_format", "block_size_in_bytes",
+      "file_size_in_bytes", "record_count", "partition", "value_counts", "null_value_counts",
+      "lower_bounds", "upper_bounds"
+  );
   private static final boolean PLAN_SCANS_WITH_WORKER_POOL =
       SystemProperties.getBoolean(SystemProperties.SCAN_THREAD_POOL_ENABLED, true);
 
@@ -133,7 +146,7 @@ class BaseTableScan implements TableScan {
             String specString = PartitionSpecParser.toJson(reader.spec());
             ResidualEvaluator residuals = new ResidualEvaluator(reader.spec(), rowFilter);
             return Iterables.transform(
-                reader.filterRows(rowFilter).select(columns),
+                reader.filterRows(rowFilter).select(SNAPSHOT_COLUMNS),
                 file -> new BaseFileScanTask(file, schemaString, specString, residuals)
             );
           });
@@ -163,6 +176,20 @@ class BaseTableScan implements TableScan {
         CloseableIterable.wrap(planFiles(), files ->
             new BinPacking.PackingIterable<>(files, splitSize, lookback, FileScanTask::length)),
         BaseCombinedScanTask::new);
+  }
+
+  @Override
+  public Schema schema() {
+    Set<Integer> requiredFieldIds = Sets.newHashSet();
+
+    // all of the filter columns are required
+    requiredFieldIds.addAll(
+        Binder.boundReferences(table.schema().asStruct(), Collections.singletonList(rowFilter)));
+
+    // all of the projection columns are required
+    requiredFieldIds.addAll(TypeUtil.getProjectedIds(table.schema().select(columns)));
+
+    return TypeUtil.select(table.schema(), requiredFieldIds);
   }
 
   @Override
