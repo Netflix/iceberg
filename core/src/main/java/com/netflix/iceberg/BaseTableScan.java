@@ -149,7 +149,8 @@ class BaseTableScan implements TableScan {
           snapshot.snapshotId(), DATE_FORMAT.format(new Date(snapshot.timestampMillis())),
           rowFilter);
 
-      Listeners.notifyAll(new ScanEvent(table.toString(), snapshot.snapshotId(), rowFilter));
+      Listeners.notifyAll(
+          new ScanEvent(table.toString(), snapshot.snapshotId(), rowFilter, schema));
 
       ConcurrentLinkedQueue<Closeable> toClose = new ConcurrentLinkedQueue<>();
       Iterable<Iterable<FileScanTask>> readers = Iterables.transform(
@@ -195,6 +196,7 @@ class BaseTableScan implements TableScan {
 
   @Override
   public Schema schema() {
+    return schema;
   }
 
   @Override

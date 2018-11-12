@@ -16,7 +16,6 @@
 
 package com.netflix.iceberg.spark.source;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.netflix.iceberg.CombinedScanTask;
@@ -203,7 +202,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
 
   private List<CombinedScanTask> tasks() {
     if (tasks == null) {
-      TableScan scan = table.newScan();
+      TableScan scan = table.newScan().project(lazySchema());
 
       if (filterExpressions != null) {
         for (Expression filter : filterExpressions) {
