@@ -50,10 +50,6 @@ subprojects {
   repositories {
     mavenCentral()
     mavenLocal()
-    maven {
-      name 'stagedSpark'
-      url 'https://repository.apache.org/content/repositories/orgapachespark-1291/'
-    }
   }
 
   configurations {
