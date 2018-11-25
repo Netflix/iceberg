@@ -16,7 +16,6 @@
 
 package com.netflix.iceberg;
 
-import com.google.common.collect.ImmutableList;
 import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.netflix.iceberg.ManifestEntry.Status;
@@ -233,16 +232,14 @@ public class TestMergeAppend extends TableTestBase {
         1, base.currentSnapshot().manifests().size());
     String initialManifest = base.currentSnapshot().manifests().get(0);
 
-    PartitionSpec newSpec = PartitionSpec.builderFor(SCHEMA)
+    // build the new spec using the table's schema, which uses fresh IDs
+    PartitionSpec newSpec = PartitionSpec.builderFor(base.schema())
         .bucket("data", 16)
         .bucket("id", 4)
         .build();
 
     // commit the new partition spec to the table manually
-    TableMetadata updated = new TableMetadata(table.ops(), null, base.location(),
-        System.currentTimeMillis(), base.lastColumnId(), base.schema(), newSpec, base.properties(),
-        base.currentSnapshot().snapshotId(), base.snapshots(), ImmutableList.of());
-    table.ops().commit(base, updated);
+    table.ops().commit(base, base.updatePartitionSpec(newSpec));
 
     DataFile newFileC = DataFiles.builder(newSpec)
         .copy(FILE_C)
@@ -281,16 +278,14 @@ public class TestMergeAppend extends TableTestBase {
         2, base.currentSnapshot().manifests().size());
     String manifest = base.currentSnapshot().manifests().get(0);
 
-    PartitionSpec newSpec = PartitionSpec.builderFor(SCHEMA)
+    // build the new spec using the table's schema, which uses fresh IDs
+    PartitionSpec newSpec = PartitionSpec.builderFor(base.schema())
         .bucket("data", 16)
         .bucket("id", 4)
         .build();
 
     // commit the new partition spec to the table manually
-    TableMetadata updated = new TableMetadata(table.ops(), null, base.location(),
-        System.currentTimeMillis(), base.lastColumnId(), base.schema(), newSpec, base.properties(),
-        base.currentSnapshot().snapshotId(), base.snapshots(), ImmutableList.of());
-    table.ops().commit(base, updated);
+    table.ops().commit(base, base.updatePartitionSpec(newSpec));
 
     DataFile newFileC = DataFiles.builder(newSpec)
         .copy(FILE_C)
