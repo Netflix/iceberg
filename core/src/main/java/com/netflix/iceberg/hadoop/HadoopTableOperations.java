@@ -42,7 +42,7 @@ import static com.netflix.iceberg.TableMetadataParser.getFileExtension;
  * <p>
  * This maintains metadata in a "metadata" folder under the table location.
  */
-class HadoopTableOperations implements TableOperations {
+public class HadoopTableOperations implements TableOperations {
   private static final Logger LOG = LoggerFactory.getLogger(HadoopTableOperations.class);
 
   private final Configuration conf;
@@ -51,7 +51,7 @@ class HadoopTableOperations implements TableOperations {
   private Integer version = null;
   private boolean shouldRefresh = true;
 
-  HadoopTableOperations(Path location, Configuration conf) {
+  protected HadoopTableOperations(Path location, Configuration conf) {
     this.conf = conf;
     this.location = location;
   }
@@ -67,7 +67,7 @@ class HadoopTableOperations implements TableOperations {
   public TableMetadata refresh() {
     int ver = version != null ? version : readVersionHint();
     Path metadataFile = metadataFile(ver);
-    FileSystem fs = Util.getFS(metadataFile, conf);
+    FileSystem fs = getFS(metadataFile, conf);
     try {
       // don't check if the file exists if version is non-null because it was already checked
       if (version == null && !fs.exists(metadataFile)) {
@@ -109,7 +109,7 @@ class HadoopTableOperations implements TableOperations {
 
     int nextVersion = (version != null ? version : 0) + 1;
     Path finalMetadataFile = metadataFile(nextVersion);
-    FileSystem fs = Util.getFS(tempMetadataFile, conf);
+    FileSystem fs = getFS(tempMetadataFile, conf);
 
     try {
       if (fs.exists(finalMetadataFile)) {
@@ -151,7 +151,7 @@ class HadoopTableOperations implements TableOperations {
   @Override
   public void deleteFile(String path) {
     Path toDelete = new Path(path);
-    FileSystem fs = Util.getFS(toDelete, conf);
+    FileSystem fs = getFS(toDelete, conf);
     try {
       fs.delete(toDelete, false /* not recursive */ );
     } catch (IOException e) {
@@ -178,7 +178,7 @@ class HadoopTableOperations implements TableOperations {
 
   private void writeVersionHint(int version) {
     Path versionHintFile = versionHintFile();
-    FileSystem fs = Util.getFS(versionHintFile, conf);
+    FileSystem fs = getFS(versionHintFile, conf);
 
     try (FSDataOutputStream out = fs.create(versionHintFile, true /* overwrite */ )) {
       out.write(String.valueOf(version).getBytes("UTF-8"));
@@ -203,5 +203,9 @@ class HadoopTableOperations implements TableOperations {
     } catch (IOException e) {
       throw new RuntimeIOException(e, "Failed to get file system for path: %s", versionHintFile);
     }
+  }
+
+  protected FileSystem getFS(Path path, Configuration conf) {
+    return Util.getFS(path, conf);
   }
 }
