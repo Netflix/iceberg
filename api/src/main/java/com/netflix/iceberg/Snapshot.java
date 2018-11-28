@@ -26,7 +26,7 @@ import java.util.List;
  * <p>
  * Snapshots are created by table operations, like {@link AppendFiles} and {@link RewriteFiles}.
  */
-public interface Snapshot extends Filterable<FilteredSnapshot> {
+public interface Snapshot {
   /**
    * Return this snapshot's ID.
    *
