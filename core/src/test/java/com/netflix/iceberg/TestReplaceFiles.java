@@ -84,7 +84,7 @@ public class TestReplaceFiles extends TableTestBase {
     long baseSnapshotId = base.currentSnapshot().snapshotId();
     Assert.assertEquals("Should create 1 manifest for initial write",
         1, base.currentSnapshot().manifests().size());
-    String initialManifest = base.currentSnapshot().manifests().get(0);
+    ManifestFile initialManifest = base.currentSnapshot().manifests().get(0);
 
     Snapshot pending = table.newRewrite()
         .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_C))
@@ -124,7 +124,7 @@ public class TestReplaceFiles extends TableTestBase {
     long baseSnapshotId = base.currentSnapshot().snapshotId();
     Assert.assertEquals("Should create 1 manifest for initial write",
         1, base.currentSnapshot().manifests().size());
-    String initialManifest = base.currentSnapshot().manifests().get(0);
+    ManifestFile initialManifest = base.currentSnapshot().manifests().get(0);
 
     Snapshot pending = table.newRewrite()
         .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_C))
@@ -164,8 +164,8 @@ public class TestReplaceFiles extends TableTestBase {
     Snapshot pending = rewrite.apply();
 
     Assert.assertEquals("Should produce 2 manifests", 2, pending.manifests().size());
-    String manifest1 = pending.manifests().get(0);
-    String manifest2 = pending.manifests().get(1);
+    ManifestFile manifest1 = pending.manifests().get(0);
+    ManifestFile manifest2 = pending.manifests().get(1);
 
     validateManifestEntries(manifest1,
         ids(pending.snapshotId()), files(FILE_B), statuses(ADDED));
@@ -175,8 +175,8 @@ public class TestReplaceFiles extends TableTestBase {
     AssertHelpers.assertThrows("Should retry 4 times and throw last failure",
         CommitFailedException.class, "Injected failure", rewrite::commit);
 
-    Assert.assertFalse("Should clean up new manifest", new File(manifest1).exists());
-    Assert.assertFalse("Should clean up new manifest", new File(manifest2).exists());
+    Assert.assertFalse("Should clean up new manifest", new File(manifest1.path()).exists());
+    Assert.assertFalse("Should clean up new manifest", new File(manifest2.path()).exists());
 
     // As commit failed all the manifests added with rewrite should be cleaned up
     Assert.assertEquals("Only 1 manifest should exist", 1, listMetadataFiles("avro").size());
@@ -194,8 +194,8 @@ public class TestReplaceFiles extends TableTestBase {
     Snapshot pending = rewrite.apply();
 
     Assert.assertEquals("Should produce 2 manifests", 2, pending.manifests().size());
-    String manifest1 = pending.manifests().get(0);
-    String manifest2 = pending.manifests().get(1);
+    ManifestFile manifest1 = pending.manifests().get(0);
+    ManifestFile manifest2 = pending.manifests().get(1);
 
     validateManifestEntries(manifest1,
         ids(pending.snapshotId()), files(FILE_B), statuses(ADDED));
@@ -204,8 +204,8 @@ public class TestReplaceFiles extends TableTestBase {
 
     rewrite.commit();
 
-    Assert.assertTrue("Should reuse the manifest for appends", new File(manifest1).exists());
-    Assert.assertTrue("Should reuse the manifest with deletes", new File(manifest2).exists());
+    Assert.assertTrue("Should reuse the manifest for appends", new File(manifest1.path()).exists());
+    Assert.assertTrue("Should reuse the manifest with deletes", new File(manifest2.path()).exists());
 
     TableMetadata metadata = readMetadata();
     Assert.assertTrue("Should commit the manifest for append",

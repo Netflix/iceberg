@@ -57,10 +57,12 @@ public class TestTableMetadataJson {
 
     long previousSnapshotId = System.currentTimeMillis() - new Random(1234).nextInt(3600);
     Snapshot previousSnapshot = new BaseSnapshot(
-        null, previousSnapshotId, null, previousSnapshotId, ImmutableList.of("file:/tmp/manfiest.1.avro"));
+        null, previousSnapshotId, null, previousSnapshotId,
+        ImmutableList.of(new GenericManifestFile("file:/tmp/manfiest.1.avro", spec.specId())));
     long currentSnapshotId = System.currentTimeMillis();
     Snapshot currentSnapshot = new BaseSnapshot(
-        null, currentSnapshotId, previousSnapshotId, currentSnapshotId, ImmutableList.of("file:/tmp/manfiest.2.avro"));
+        null, currentSnapshotId, previousSnapshotId, currentSnapshotId,
+        ImmutableList.of(new GenericManifestFile("file:/tmp/manfiest.2.avro", spec.specId())));
 
     List<SnapshotLogEntry> snapshotLog = ImmutableList.<SnapshotLogEntry>builder()
         .add(new SnapshotLogEntry(previousSnapshot.timestampMillis(), previousSnapshot.snapshotId()))
@@ -117,10 +119,12 @@ public class TestTableMetadataJson {
 
     long previousSnapshotId = System.currentTimeMillis() - new Random(1234).nextInt(3600);
     Snapshot previousSnapshot = new BaseSnapshot(
-        null, previousSnapshotId, null, previousSnapshotId, ImmutableList.of("file:/tmp/manfiest.1.avro"));
+        null, previousSnapshotId, null, previousSnapshotId,
+        ImmutableList.of(new GenericManifestFile("file:/tmp/manfiest.1.avro", spec.specId())));
     long currentSnapshotId = System.currentTimeMillis();
     Snapshot currentSnapshot = new BaseSnapshot(
-        null, currentSnapshotId, previousSnapshotId, currentSnapshotId, ImmutableList.of("file:/tmp/manfiest.2.avro"));
+        null, currentSnapshotId, previousSnapshotId, currentSnapshotId,
+        ImmutableList.of(new GenericManifestFile("file:/tmp/manfiest.2.avro", spec.specId())));
 
     List<SnapshotLogEntry> reversedSnapshotLog = Lists.newArrayList();
 
@@ -160,10 +164,12 @@ public class TestTableMetadataJson {
 
     long previousSnapshotId = System.currentTimeMillis() - new Random(1234).nextInt(3600);
     Snapshot previousSnapshot = new BaseSnapshot(
-        null, previousSnapshotId, null, previousSnapshotId, ImmutableList.of("file:/tmp/manfiest.1.avro"));
+        null, previousSnapshotId, null, previousSnapshotId,
+        ImmutableList.of(new GenericManifestFile("file:/tmp/manfiest.1.avro", spec.specId())));
     long currentSnapshotId = System.currentTimeMillis();
     Snapshot currentSnapshot = new BaseSnapshot(
-        null, currentSnapshotId, previousSnapshotId, currentSnapshotId, ImmutableList.of("file:/tmp/manfiest.2.avro"));
+        null, currentSnapshotId, previousSnapshotId, currentSnapshotId,
+        ImmutableList.of(new GenericManifestFile("file:/tmp/manfiest.2.avro", spec.specId())));
 
     TableMetadata expected = new TableMetadata(null, null, "s3://bucket/test/location",
         System.currentTimeMillis(), 3, schema, 6, ImmutableList.of(spec),

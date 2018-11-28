@@ -49,7 +49,7 @@ public class OverwriteData extends MergingSnapshotUpdate implements OverwriteFil
   }
 
   @Override
-  public List<String> apply(TableMetadata base) {
+  public List<ManifestFile> apply(TableMetadata base) {
     if (validateAddedFiles) {
       PartitionSpec spec = writeSpec();
       Expression rowFilter = rowFilter();
