@@ -52,6 +52,10 @@ public class BoundReference<T> implements Reference {
     return fieldId;
   }
 
+  public int pos() {
+    return pos;
+  }
+
   public T get(StructLike struct) {
     return struct.get(pos, javaType());
   }
