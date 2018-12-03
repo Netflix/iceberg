@@ -43,6 +43,7 @@ class ManifestWriter implements FileAppender<DataFile> {
   private static final Logger LOG = LoggerFactory.getLogger(ManifestWriter.class);
 
   private final String location;
+  private final OutputFile file;
   private final int specId;
   private final FileAppender<ManifestEntry> writer;
   private final long snapshotId;
@@ -56,6 +57,7 @@ class ManifestWriter implements FileAppender<DataFile> {
 
   ManifestWriter(PartitionSpec spec, OutputFile file, long snapshotId) {
     this.location = file.location();
+    this.file = file;
     this.specId = spec.specId();
     this.writer = newAppender(FileFormat.AVRO, spec, file);
     this.snapshotId = snapshotId;
@@ -125,7 +127,7 @@ class ManifestWriter implements FileAppender<DataFile> {
 
   public ManifestFile toManifestFile() {
     Preconditions.checkState(closed, "Cannot build ManifestFile, writer is not closed");
-    return new GenericManifestFile(location, specId, snapshotId,
+    return new GenericManifestFile(location, file.toInputFile().getLength(), specId, snapshotId,
         addedFiles, existingFiles, deletedFiles, stats.summaries());
   }
 

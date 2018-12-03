@@ -31,6 +31,7 @@ public class TestPartitionPaths {
   );
 
   @Test
+  @SuppressWarnings("unchecked")
   public void testPartitionPath() {
     PartitionSpec spec = PartitionSpec.builderFor(SCHEMA)
         .hour("ts")
