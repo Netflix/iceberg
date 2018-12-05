@@ -1,3 +1,11 @@
+**Iceberg has moved! Iceberg has been donated to the Apache Software Foundation.**
+
+Please use the new Apache mailing lists, site, and repository:
+
+* Mailing list: dev@iceberg.apache.org (subscribe using dev-subscribe@iceberg.apache.org)
+* Site: https://iceberg.apache.org
+* Repository: https://github.com/apache/incubator-iceberg
+
 ![](images/Iceberg-logo.png)
 
 [![](https://travis-ci.org/Netflix/iceberg.svg?branch=master)](https://travis-ci.org/Netflix/iceberg/branches)
