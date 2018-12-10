@@ -17,7 +17,6 @@
 package com.netflix.iceberg.spark.source;
 
 import com.google.common.collect.Lists;
-import com.google.common.collect.Sets;
 import com.netflix.iceberg.CombinedScanTask;
 import com.netflix.iceberg.DataFile;
 import com.netflix.iceberg.FileScanTask;
@@ -36,10 +35,9 @@ import com.netflix.iceberg.hadoop.HadoopInputFile;
 import com.netflix.iceberg.io.CloseableIterable;
 import com.netflix.iceberg.io.InputFile;
 import com.netflix.iceberg.parquet.Parquet;
-import com.netflix.iceberg.spark.SparkExpressions;
+import com.netflix.iceberg.spark.SparkFilters;
 import com.netflix.iceberg.spark.SparkSchemaUtil;
 import com.netflix.iceberg.spark.data.SparkAvroReader;
-import com.netflix.iceberg.spark.data.SparkOrcReader;
 import com.netflix.iceberg.spark.data.SparkParquetReaders;
 import com.netflix.iceberg.types.TypeUtil;
 import com.netflix.iceberg.types.Types;
@@ -50,15 +48,14 @@ import org.apache.spark.sql.catalyst.expressions.AttributeReference;
 import org.apache.spark.sql.catalyst.expressions.GenericInternalRow;
 import org.apache.spark.sql.catalyst.expressions.JoinedRow;
 import org.apache.spark.sql.catalyst.expressions.UnsafeProjection;
-import org.apache.spark.sql.catalyst.expressions.UnsafeRow;
-import org.apache.spark.sql.sources.v2.reader.DataReader;
+import org.apache.spark.sql.sources.Filter;
 import org.apache.spark.sql.sources.v2.reader.DataSourceReader;
-import org.apache.spark.sql.sources.v2.reader.DataReaderFactory;
+import org.apache.spark.sql.sources.v2.reader.InputPartition;
+import org.apache.spark.sql.sources.v2.reader.InputPartitionReader;
 import org.apache.spark.sql.sources.v2.reader.Statistics;
-import org.apache.spark.sql.sources.v2.reader.SupportsPushDownCatalystFilters;
+import org.apache.spark.sql.sources.v2.reader.SupportsPushDownFilters;
 import org.apache.spark.sql.sources.v2.reader.SupportsPushDownRequiredColumns;
 import org.apache.spark.sql.sources.v2.reader.SupportsReportStatistics;
-import org.apache.spark.sql.sources.v2.reader.SupportsScanUnsafeRow;
 import org.apache.spark.sql.types.BinaryType;
 import org.apache.spark.sql.types.DataType;
 import org.apache.spark.sql.types.Decimal;
@@ -83,17 +80,16 @@ import static com.netflix.iceberg.spark.SparkSchemaUtil.prune;
 import static scala.collection.JavaConverters.asScalaBufferConverter;
 import static scala.collection.JavaConverters.seqAsJavaListConverter;
 
-class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDownCatalystFilters,
-    SupportsPushDownRequiredColumns, SupportsReportStatistics {
+class Reader implements DataSourceReader, SupportsPushDownFilters, SupportsPushDownRequiredColumns,
+    SupportsReportStatistics {
 
-  private static final org.apache.spark.sql.catalyst.expressions.Expression[] NO_EXPRS =
-      new org.apache.spark.sql.catalyst.expressions.Expression[0];
+  private static final Filter[] NO_FILTERS = new Filter[0];
 
   private final Table table;
   private final SerializableConfiguration conf;
   private StructType requestedSchema = null;
   private List<Expression> filterExpressions = null;
-  private org.apache.spark.sql.catalyst.expressions.Expression[] pushedExprs = NO_EXPRS;
+  private Filter[] pushedFilters = NO_FILTERS;
 
   // lazy variables
   private Schema schema = null;
@@ -130,11 +126,11 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
   }
 
   @Override
-  public List<DataReaderFactory<UnsafeRow>> createUnsafeRowReaderFactories() {
+  public List<InputPartition<InternalRow>> planInputPartitions() {
     String tableSchemaString = SchemaParser.toJson(table.schema());
     String expectedSchemaString = SchemaParser.toJson(lazySchema());
 
-    List<DataReaderFactory<UnsafeRow>> readTasks = Lists.newArrayList();
+    List<InputPartition<InternalRow>> readTasks = Lists.newArrayList();
     for (CombinedScanTask task : tasks()) {
       readTasks.add(new ReadTask(task, tableSchemaString, expectedSchemaString, conf));
     }
@@ -143,16 +139,14 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
   }
 
   @Override
-  public org.apache.spark.sql.catalyst.expressions.Expression[] pushCatalystFilters(
-      org.apache.spark.sql.catalyst.expressions.Expression[] filters) {
+  public Filter[] pushFilters(Filter[] filters) {
     this.tasks = null; // invalidate cached tasks, if present
 
     List<Expression> expressions = Lists.newArrayListWithExpectedSize(filters.length);
-    List<org.apache.spark.sql.catalyst.expressions.Expression> pushed =
-        Lists.newArrayListWithExpectedSize(filters.length);
+    List<Filter> pushed = Lists.newArrayListWithExpectedSize(filters.length);
 
-    for (org.apache.spark.sql.catalyst.expressions.Expression filter : filters) {
-      Expression expr = SparkExpressions.convert(filter);
+    for (Filter filter : filters) {
+      Expression expr = SparkFilters.convert(filter);
       if (expr != null) {
         expressions.add(expr);
         pushed.add(filter);
@@ -160,7 +154,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
     }
 
     this.filterExpressions = expressions;
-    this.pushedExprs = pushed.toArray(new org.apache.spark.sql.catalyst.expressions.Expression[0]);
+    this.pushedFilters = pushed.toArray(new Filter[0]);
 
     // invalidate the schema that will be projected
     this.schema = null;
@@ -172,8 +166,8 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
   }
 
   @Override
-  public org.apache.spark.sql.catalyst.expressions.Expression[] pushedCatalystFilters() {
-    return pushedExprs;
+  public Filter[] pushedFilters() {
+    return pushedFilters;
   }
 
   @Override
@@ -186,7 +180,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
   }
 
   @Override
-  public Statistics getStatistics() {
+  public Statistics estimateStatistics() {
     long sizeInBytes = 0L;
     long numRows = 0L;
 
@@ -227,7 +221,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
         table, lazySchema().asStruct(), filterExpressions);
   }
 
-  private static class ReadTask implements DataReaderFactory<UnsafeRow>, Serializable {
+  private static class ReadTask implements InputPartition<InternalRow>, Serializable {
     private final CombinedScanTask task;
     private final String tableSchemaString;
     private final String expectedSchemaString;
@@ -245,7 +239,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
     }
 
     @Override
-    public DataReader<UnsafeRow> createDataReader() {
+    public InputPartitionReader<InternalRow> createPartitionReader() {
       return new TaskDataReader(task, lazyTableSchema(), lazyExpectedSchema(), conf.value());
     }
 
@@ -264,7 +258,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
     }
   }
 
-  private static class TaskDataReader implements DataReader<UnsafeRow> {
+  private static class TaskDataReader implements InputPartitionReader<InternalRow> {
     // for some reason, the apply method can't be called from Java without reflection
     private static final DynMethods.UnboundMethod APPLY_PROJECTION = DynMethods.builder("apply")
         .impl(UnsafeProjection.class, InternalRow.class)
@@ -275,9 +269,9 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
     private final Schema expectedSchema;
     private final Configuration conf;
 
-    private Iterator<UnsafeRow> currentIterator = null;
+    private Iterator<InternalRow> currentIterator = null;
     private Closeable currentCloseable = null;
-    private UnsafeRow current = null;
+    private InternalRow current = null;
 
     public TaskDataReader(CombinedScanTask task, Schema tableSchema, Schema expectedSchema, Configuration conf) {
       this.tasks = task.files().iterator();
@@ -306,7 +300,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
     }
 
     @Override
-    public UnsafeRow get() {
+    public InternalRow get() {
       return current;
     }
 
@@ -321,13 +315,13 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
       }
     }
 
-    private Iterator<UnsafeRow> open(FileScanTask task) {
+    private Iterator<InternalRow> open(FileScanTask task) {
       DataFile file = task.file();
 
       // schema or rows returned by readers
       Schema finalSchema = expectedSchema;
       PartitionSpec spec = task.spec();
-      Set<Integer> idColumns = identitySourceIds(spec);
+      Set<Integer> idColumns = spec.identitySourceIds();
 
       // schema needed for the projection and filtering
       Schema requiredSchema = prune(tableSchema, convert(finalSchema), task.residual());
@@ -362,6 +356,7 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
         iter = open(task, finalSchema, conf);
       }
 
+      // TODO: remove the projection by reporting the iterator's schema back to Spark
       return transform(iter,
           APPLY_PROJECTION.bind(projection(finalSchema, iterSchema))::invoke);
     }
@@ -388,29 +383,11 @@ class Reader implements DataSourceReader, SupportsScanUnsafeRow, SupportsPushDow
           asScalaBufferConverter(attrs).asScala().toSeq());
     }
 
-    private static Set<Integer> identitySourceIds(PartitionSpec spec) {
-      Set<Integer> sourceIds = Sets.newHashSet();
-      List<PartitionField> fields = spec.fields();
-      for (int i = 0; i < fields.size(); i += 1) {
-        PartitionField field = fields.get(i);
-        if ("identity".equals(field.transform().toString())) {
-          sourceIds.add(field.sourceId());
-        }
-      }
-
-      return sourceIds;
-    }
-
     private Iterator<InternalRow> open(FileScanTask task, Schema readSchema,
                                        Configuration conf) {
       InputFile location = HadoopInputFile.fromLocation(task.file().path(), conf);
       CloseableIterable<InternalRow> iter;
       switch (task.file().format()) {
-        case ORC:
-          SparkOrcReader reader = new SparkOrcReader(location, task, readSchema);
-          this.currentCloseable = reader;
-          return reader;
-
         case PARQUET:
           iter = newParquetIterable(location, task, readSchema);
           break;
