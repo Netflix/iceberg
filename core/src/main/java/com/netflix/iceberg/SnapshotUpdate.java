@@ -19,6 +19,7 @@ package com.netflix.iceberg;
 import com.google.common.cache.CacheBuilder;
 import com.google.common.cache.CacheLoader;
 import com.google.common.cache.LoadingCache;
+import com.google.common.collect.Lists;
 import com.google.common.collect.Sets;
 import com.netflix.iceberg.exceptions.CommitFailedException;
 import com.netflix.iceberg.exceptions.RuntimeIOException;
@@ -32,6 +33,7 @@ import java.util.Arrays;
 import java.util.List;
 import java.util.Set;
 import java.util.UUID;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.concurrent.atomic.AtomicLong;
 
 import static com.netflix.iceberg.TableProperties.COMMIT_MAX_RETRY_WAIT_MS;
@@ -67,6 +69,8 @@ abstract class SnapshotUpdate implements PendingUpdate<Snapshot> {
 
   private final TableOperations ops;
   private final String commitUUID = UUID.randomUUID().toString();
+  private final AtomicInteger attempt = new AtomicInteger(0);
+  private final List<String> manifestLists = Lists.newArrayList();
   private Long snapshotId = null;
   private TableMetadata base = null;
 
@@ -107,7 +111,11 @@ abstract class SnapshotUpdate implements PendingUpdate<Snapshot> {
       OutputFile manifestList = manifestListPath();
 
       try (ManifestListWriter writer = new ManifestListWriter(
-          manifestListPath(), snapshotId(), parentSnapshotId)) {
+          manifestList, snapshotId(), parentSnapshotId)) {
+
+        // keep track of the manifest lists created
+        manifestLists.add(manifestList.location());
+
         ManifestFile[] manifestFiles = new ManifestFile[manifests.size()];
 
         Tasks.range(manifestFiles.length)
@@ -169,6 +177,12 @@ abstract class SnapshotUpdate implements PendingUpdate<Snapshot> {
       Snapshot saved = ops.refresh().snapshot(newSnapshotId.get());
       if (saved != null) {
         cleanUncommitted(Sets.newHashSet(saved.manifests()));
+        // also clean up unused manifest lists created by multiple attempts
+        for (String manifestList : manifestLists) {
+          if (!saved.manifestListLocation().equals(manifestList)) {
+            ops.io().deleteFile(manifestList);
+          }
+        }
       } else {
         // saved may not be present if the latest metadata couldn't be loaded due to eventual
         // consistency problems in refresh. in that case, don't clean up.
@@ -181,6 +195,10 @@ abstract class SnapshotUpdate implements PendingUpdate<Snapshot> {
   }
 
   protected void cleanAll() {
+    for (String manifestList : manifestLists) {
+      ops.io().deleteFile(manifestList);
+    }
+    manifestLists.clear();
     cleanUncommitted(EMPTY_SET);
   }
 
@@ -190,7 +208,7 @@ abstract class SnapshotUpdate implements PendingUpdate<Snapshot> {
 
   protected OutputFile manifestListPath() {
     return ops.io().newOutputFile(ops.metadataFileLocation(FileFormat.AVRO.addExtension(
-        String.format("snap-%d-%s", snapshotId(), commitUUID))));
+        String.format("snap-%d-%d-%s", snapshotId(), attempt.incrementAndGet(), commitUUID))));
   }
 
   protected OutputFile manifestPath(int i) {
