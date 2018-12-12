@@ -30,7 +30,7 @@ import static com.google.common.collect.Iterators.concat;
 public class TestMergeAppend extends TableTestBase {
   @Test
   public void testEmptyTableAppend() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     TableMetadata base = readMetadata();
     Assert.assertNull("Should not have a current snapshot", base.currentSnapshot());
@@ -53,7 +53,7 @@ public class TestMergeAppend extends TableTestBase {
     // merge all manifests for this test
     table.updateProperties().set("commit.manifest.min-count-to-merge", "1").commit();
 
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)
@@ -89,7 +89,7 @@ public class TestMergeAppend extends TableTestBase {
     // merge all manifests for this test
     table.updateProperties().set("commit.manifest.min-count-to-merge", "1").commit();
 
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)
@@ -142,7 +142,7 @@ public class TestMergeAppend extends TableTestBase {
     // only merge when there are at least 4 manifests
     table.updateProperties().set("commit.manifest.min-count-to-merge", "4").commit();
 
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newFastAppend()
         .appendFile(FILE_A)
@@ -190,7 +190,7 @@ public class TestMergeAppend extends TableTestBase {
         .set(TableProperties.MANIFEST_TARGET_SIZE_BYTES, "10")
         .commit();
 
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)

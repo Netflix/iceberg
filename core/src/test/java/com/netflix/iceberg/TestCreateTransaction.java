@@ -46,7 +46,7 @@ public class TestCreateTransaction extends TableTestBase {
     Assert.assertEquals("Should have metadata version 0",
         0, (int) TestTables.metadataVersion("test_create"));
     Assert.assertEquals("Should have 0 manifest files",
-        0, listMetadataFiles(tableDir, "avro").size());
+        0, listManifestFiles(tableDir).size());
 
     Assert.assertEquals("Table schema should match with reassigned IDs",
         assignFreshIds(SCHEMA).asStruct(), meta.schema().asStruct());
@@ -83,7 +83,7 @@ public class TestCreateTransaction extends TableTestBase {
     Assert.assertEquals("Should have metadata version 0",
         0, (int) TestTables.metadataVersion("test_append"));
     Assert.assertEquals("Should have 1 manifest file",
-        1, listMetadataFiles(tableDir, "avro").size());
+        1, listManifestFiles(tableDir).size());
 
     Assert.assertEquals("Table schema should match with reassigned IDs",
         assignFreshIds(SCHEMA).asStruct(), meta.schema().asStruct());
@@ -125,7 +125,7 @@ public class TestCreateTransaction extends TableTestBase {
     Assert.assertEquals("Should have metadata version 0",
         0, (int) TestTables.metadataVersion("test_append"));
     Assert.assertEquals("Should have 1 manifest file",
-        1, listMetadataFiles(tableDir, "avro").size());
+        1, listManifestFiles(tableDir).size());
 
     Assert.assertEquals("Table schema should match with reassigned IDs",
         assignFreshIds(SCHEMA).asStruct(), meta.schema().asStruct());
@@ -163,7 +163,7 @@ public class TestCreateTransaction extends TableTestBase {
     Assert.assertEquals("Should have metadata version 0",
         0, (int) TestTables.metadataVersion("test_properties"));
     Assert.assertEquals("Should have 0 manifest files",
-        0, listMetadataFiles(tableDir, "avro").size());
+        0, listManifestFiles(tableDir).size());
 
     Assert.assertEquals("Table schema should match with reassigned IDs",
         assignFreshIds(SCHEMA).asStruct(), meta.schema().asStruct());
@@ -205,7 +205,7 @@ public class TestCreateTransaction extends TableTestBase {
     Assert.assertEquals("Should have metadata version 0",
         0, (int) TestTables.metadataVersion("test_properties"));
     Assert.assertEquals("Should have 0 manifest files",
-        0, listMetadataFiles(tableDir, "avro").size());
+        0, listManifestFiles(tableDir).size());
 
     Assert.assertEquals("Table schema should match with reassigned IDs",
         assignFreshIds(SCHEMA).asStruct(), meta.schema().asStruct());

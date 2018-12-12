@@ -96,6 +96,9 @@ public class Files {
   }
 
   public static InputFile localInput(String file) {
+    if (file.startsWith("file:")) {
+      return localInput(new File(file.replaceFirst("file:", "")));
+    }
     return localInput(new File(file));
   }
 

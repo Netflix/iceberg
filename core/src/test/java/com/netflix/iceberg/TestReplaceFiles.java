@@ -33,7 +33,7 @@ public class TestReplaceFiles extends TableTestBase {
 
   @Test
   public void testEmptyTable() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     TableMetadata base = readMetadata();
     Assert.assertNull("Should not have a current snapshot", base.currentSnapshot());
@@ -48,7 +48,7 @@ public class TestReplaceFiles extends TableTestBase {
 
   @Test
   public void testAddOnly() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     AssertHelpers.assertThrows("Expected an exception",
         IllegalArgumentException.class,
@@ -60,7 +60,7 @@ public class TestReplaceFiles extends TableTestBase {
 
   @Test
   public void testDeleteOnly() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     AssertHelpers.assertThrows("Expected an exception",
         IllegalArgumentException.class,
@@ -72,7 +72,7 @@ public class TestReplaceFiles extends TableTestBase {
 
   @Test
   public void testDeleteWithDuplicateEntriesInManifest() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)
@@ -108,12 +108,12 @@ public class TestReplaceFiles extends TableTestBase {
         statuses(DELETED, DELETED, EXISTING));
 
     // We should only get the 3 manifests that this test is expected to add.
-    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
+    Assert.assertEquals("Only 3 manifests should exist", 3, listManifestFiles().size());
   }
 
   @Test
   public void testAddAndDelete() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)
@@ -148,7 +148,7 @@ public class TestReplaceFiles extends TableTestBase {
         statuses(DELETED, EXISTING));
 
     // We should only get the 3 manifests that this test is expected to add.
-    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
+    Assert.assertEquals("Only 3 manifests should exist", 3, listManifestFiles().size());
   }
 
   @Test
@@ -179,7 +179,7 @@ public class TestReplaceFiles extends TableTestBase {
     Assert.assertFalse("Should clean up new manifest", new File(manifest2.path()).exists());
 
     // As commit failed all the manifests added with rewrite should be cleaned up
-    Assert.assertEquals("Only 1 manifest should exist", 1, listMetadataFiles("avro").size());
+    Assert.assertEquals("Only 1 manifest should exist", 1, listManifestFiles().size());
   }
 
   @Test
@@ -212,12 +212,12 @@ public class TestReplaceFiles extends TableTestBase {
         metadata.currentSnapshot().manifests().contains(manifest2));
 
     // 2 manifests added by rewrite and 1 original manifest should be found.
-    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
+    Assert.assertEquals("Only 3 manifests should exist", 3, listManifestFiles().size());
   }
 
   @Test
   public void testDeleteNonExistentFile() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)
@@ -235,12 +235,12 @@ public class TestReplaceFiles extends TableTestBase {
             .rewriteFiles(Sets.newSet(FILE_C), Sets.newSet(FILE_D))
             .commit());
 
-    Assert.assertEquals("Only 1 manifests should exist", 1, listMetadataFiles("avro").size());
+    Assert.assertEquals("Only 1 manifests should exist", 1, listManifestFiles().size());
   }
 
   @Test
   public void testAlreadyDeletedFile() {
-    Assert.assertEquals("Table should start empty", 0, listMetadataFiles("avro").size());
+    Assert.assertEquals("Table should start empty", 0, listManifestFiles().size());
 
     table.newAppend()
         .appendFile(FILE_A)
@@ -279,6 +279,6 @@ public class TestReplaceFiles extends TableTestBase {
             .rewriteFiles(Sets.newSet(FILE_A), Sets.newSet(FILE_D))
             .commit());
 
-    Assert.assertEquals("Only 3 manifests should exist", 3, listMetadataFiles("avro").size());
+    Assert.assertEquals("Only 3 manifests should exist", 3, listManifestFiles().size());
   }
 }
