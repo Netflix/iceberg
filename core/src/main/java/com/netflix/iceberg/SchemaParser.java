@@ -41,6 +41,7 @@ public class SchemaParser {
   private static final String ELEMENT = "element";
   private static final String KEY = "key";
   private static final String VALUE = "value";
+  private static final String DOC = "doc";
   private static final String NAME = "name";
   private static final String ID = "id";
   private static final String ELEMENT_ID = "element-id";
@@ -62,6 +63,9 @@ public class SchemaParser {
       generator.writeBooleanField(REQUIRED, field.isRequired());
       generator.writeFieldName(TYPE);
       toJson(field.type(), generator);
+      if (field.doc() != null) {
+        generator.writeStringField(DOC, field.doc());
+      }
       generator.writeEndObject();
     }
     generator.writeEndArray();
@@ -182,11 +186,12 @@ public class SchemaParser {
       String name = JsonUtil.getString(NAME, field);
       Type type = typeFromJson(field.get(TYPE));
 
+      String doc = JsonUtil.getStringOrNull(DOC, field);
       boolean isRequired = JsonUtil.getBool(REQUIRED, field);
       if (isRequired) {
-        fields.add(Types.NestedField.required(id, name, type));
+        fields.add(Types.NestedField.required(id, name, type, doc));
       } else {
-        fields.add(Types.NestedField.optional(id, name, type));
+        fields.add(Types.NestedField.optional(id, name, type, doc));
       }
     }
 
