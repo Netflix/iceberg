@@ -16,6 +16,8 @@
 
 package com.netflix.iceberg;
 
+import java.util.UUID;
+
 import com.netflix.iceberg.io.OutputFile;
 
 /**
@@ -70,6 +72,11 @@ public interface TableOperations {
    *
    * @return a long snapshot ID
    */
-  long newSnapshotId();
+  default long newSnapshotId() {
+    UUID uuid = UUID.randomUUID();
+    long mostSignificantBits = uuid.getMostSignificantBits();
+    long leastSignificantBits = uuid.getLeastSignificantBits();
+    return Math.abs(mostSignificantBits ^ leastSignificantBits);
+  }
 
 }

@@ -151,11 +151,6 @@ public class HadoopTableOperations implements TableOperations {
     return metadataPath(fileName).toString();
   }
 
-  @Override
-  public long newSnapshotId() {
-    return System.currentTimeMillis();
-  }
-
   private Path metadataFile(int version) {
     return metadataPath("v" + version + getFileExtension(conf));
   }
