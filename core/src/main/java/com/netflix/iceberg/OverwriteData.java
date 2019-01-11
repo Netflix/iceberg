@@ -31,6 +31,11 @@ public class OverwriteData extends MergingSnapshotUpdate implements OverwriteFil
   }
 
   @Override
+  protected String operation() {
+    return DataOperations.OVERWRITE;
+  }
+
+  @Override
   public OverwriteFiles overwriteByRowFilter(Expression expr) {
     deleteByRowFilter(expr);
     return this;
