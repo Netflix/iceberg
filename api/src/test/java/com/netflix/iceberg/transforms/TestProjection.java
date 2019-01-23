@@ -68,7 +68,7 @@ public class TestProjection {
       UnboundPredicate<?> projected = assertAndUnwrapUnbound(expr);
 
       // check inclusive the bound predicate to ensure the types are correct
-      BoundPredicate<?> bound = assertAndUnwrap(predicate.bind(spec.schema().asStruct()));
+      BoundPredicate<?> bound = assertAndUnwrap(predicate.bind(spec.schema().asStruct(), true));
 
       Assert.assertEquals("Field name should match partition struct field",
           "id", projected.ref().name());
@@ -106,7 +106,7 @@ public class TestProjection {
       UnboundPredicate<?> projected = assertAndUnwrapUnbound(expr);
 
       // check inclusive the bound predicate to ensure the types are correct
-      BoundPredicate<?> bound = assertAndUnwrap(predicate.bind(spec.schema().asStruct()));
+      BoundPredicate<?> bound = assertAndUnwrap(predicate.bind(spec.schema().asStruct(), true));
 
       Assert.assertEquals("Field name should match partition struct field",
           "id", projected.ref().name());
