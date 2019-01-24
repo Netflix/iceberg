@@ -21,9 +21,11 @@ import com.netflix.iceberg.avro.Avro;
 import com.netflix.iceberg.exceptions.RuntimeIOException;
 import com.netflix.iceberg.io.FileAppender;
 import com.netflix.iceberg.io.OutputFile;
+import com.netflix.iceberg.util.Tasks;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import java.io.IOException;
+import java.util.concurrent.atomic.AtomicLong;
 
 import static com.netflix.iceberg.ManifestEntry.Status.DELETED;
 
@@ -118,7 +120,13 @@ class ManifestWriter implements FileAppender<DataFile> {
 
   public ManifestFile toManifestFile() {
     Preconditions.checkState(closed, "Cannot build ManifestFile, writer is not closed");
-    return new GenericManifestFile(location, file.toInputFile().getLength(), specId, snapshotId,
+    // the file was just written. for eventually consistent stores it may not be immediately
+    // visible, so add a few retries to get the file length.
+    AtomicLong length = new AtomicLong(0L);
+    Tasks.foreach(file.toInputFile())
+        .retry(10).exponentialBackoff(50, 200, 5000, 2.0)
+        .run(input -> length.set(input.getLength()));
+    return new GenericManifestFile(location, length.get(), specId, snapshotId,
         addedFiles, existingFiles, deletedFiles, stats.summaries());
   }
 
