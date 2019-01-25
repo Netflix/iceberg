@@ -87,6 +87,7 @@ public class ParquetDictionaryRowGroupFilter {
     private DictionaryPageReadStore dictionaries = null;
     private Map<Integer, Set<?>> dictCache = null;
     private Map<Integer, Boolean> isFallback = null;
+    private Map<Integer, Boolean> mayContainNulls = null;
     private Map<Integer, ColumnDescriptor> cols = null;
     private Map<Integer, Function<Object, Object>> conversions = null;
 
@@ -95,6 +96,7 @@ public class ParquetDictionaryRowGroupFilter {
       this.dictionaries = dictionaries;
       this.dictCache = Maps.newHashMap();
       this.isFallback = Maps.newHashMap();
+      this.mayContainNulls = Maps.newHashMap();
       this.cols = Maps.newHashMap();
       this.conversions = Maps.newHashMap();
 
@@ -112,6 +114,7 @@ public class ParquetDictionaryRowGroupFilter {
         if (colType.getId() != null) {
           int id = colType.getId().intValue();
           isFallback.put(id, hasNonDictionaryPages(meta));
+          mayContainNulls.put(id, mayContainNull(meta));
         }
       }
 
@@ -279,7 +282,7 @@ public class ParquetDictionaryRowGroupFilter {
       }
 
       Set<T> dictionary = dict(id, lit.comparator());
-      if (dictionary.size() > 1) {
+      if (dictionary.size() > 1 || mayContainNulls.get(id)) {
         return ROWS_MIGHT_MATCH;
       }
 
@@ -343,6 +346,10 @@ public class ParquetDictionaryRowGroupFilter {
 
       return dictSet;
     }
+  }
+
+  private static boolean mayContainNull(ColumnChunkMetaData meta) {
+    return meta.getStatistics() == null || meta.getStatistics().getNumNulls() != 0;
   }
 
   @SuppressWarnings("deprecation")
