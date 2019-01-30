@@ -20,11 +20,13 @@
 package com.netflix.iceberg;
 
 import com.google.common.base.Joiner;
+import com.google.common.base.Joiner.MapJoiner;
+import com.google.common.base.Splitter;
+import com.google.common.base.Splitter.MapSplitter;
 import com.google.common.collect.ImmutableMap;
-import com.google.common.collect.Sets;
+import com.google.common.collect.Maps;
 import org.apache.hadoop.conf.Configuration;
 import java.util.Map;
-import java.util.Set;
 
 public class SnapshotSummary {
   public static final String GENIE_ID_PROP = "genie-id";
@@ -34,10 +36,13 @@ public class SnapshotSummary {
   public static final String ADDED_RECORDS_PROP = "added-records";
   public static final String DELETED_RECORDS_PROP = "deleted-records";
   public static final String TOTAL_RECORDS_PROP = "total-records";
+  public static final String ADDED_FILE_SIZE_PROP = "added-files-size";
   public static final String DELETED_DUPLICATE_FILES = "deleted-duplicate-files";
   public static final String CHANGED_PARTITION_COUNT_PROP = "changed-partition-count";
-  public static final String CHANGED_PARTITIONS_PROP = "changed-partitions";
-  public static final char CHANGED_PARTITIONS_DELIM = '\01';
+  public static final String CHANGED_PARTITION_PREFIX = "partitions.";
+  public static final String PARTITION_SUMMARY_PROP = "partition-summaries-included";
+  public static final MapJoiner MAP_JOINER = Joiner.on(",").withKeyValueSeparator("=");
+  public static final MapSplitter MAP_SPLITTER = Splitter.on(",").withKeyValueSeparator("=");
 
   private SnapshotSummary() {
   }
@@ -48,7 +53,7 @@ public class SnapshotSummary {
 
   public static class Builder {
     // commit summary tracking
-    private Set<String> changedPartitions = Sets.newHashSet();
+    private Map<String, ScanSummary.PartitionMetrics> changedPartitions = Maps.newHashMap();
     private long addedFiles = 0L;
     private long deletedFiles = 0L;
     private long deletedDuplicateFiles = 0L;
@@ -69,15 +74,29 @@ public class SnapshotSummary {
     }
 
     public void deletedFile(PartitionSpec spec, DataFile file) {
-      changedPartitions.add(spec.partitionToPath(file.partition()));
+      updatePartitions(spec, file, false);
       this.deletedFiles += 1;
       this.deletedRecords += file.recordCount();
     }
 
     public void addedFile(PartitionSpec spec, DataFile file) {
-      changedPartitions.add(spec.partitionToPath(file.partition()));
+      updatePartitions(spec, file, true);
       this.addedFiles += 1;
       this.addedRecords += file.recordCount();
+    }
+
+    private void updatePartitions(PartitionSpec spec, DataFile file, boolean isAddition) {
+      String key = spec.partitionToPath(file.partition());
+
+      ScanSummary.PartitionMetrics metrics = changedPartitions.get(key);
+      if (metrics == null) {
+        metrics = new ScanSummary.PartitionMetrics();
+      }
+
+      if (isAddition) {
+        // only add partition metrics for additions
+        changedPartitions.put(key, metrics.updateFromFile(file, null));
+      }
     }
 
     public Map<String, String> build() {
@@ -91,8 +110,18 @@ public class SnapshotSummary {
       setIf(addedRecords > 0, builder, ADDED_RECORDS_PROP, addedRecords);
       setIf(deletedRecords > 0, builder, DELETED_RECORDS_PROP, deletedRecords);
       setIf(true, builder, CHANGED_PARTITION_COUNT_PROP, changedPartitions.size());
-      setIf(changedPartitions.size() < 100, builder, CHANGED_PARTITIONS_PROP,
-          Joiner.on(CHANGED_PARTITIONS_DELIM).join(changedPartitions));
+
+      if (changedPartitions.size() < 100) {
+        setIf(true, builder, PARTITION_SUMMARY_PROP, "true");
+        for (Map.Entry<String, ScanSummary.PartitionMetrics> entry : changedPartitions.entrySet()) {
+          String key = entry.getKey();
+          ScanSummary.PartitionMetrics metrics = entry.getValue();
+          setIf(true, builder, CHANGED_PARTITION_PREFIX + key, MAP_JOINER.join(ImmutableMap.of(
+              ADDED_FILES_PROP, metrics.fileCount(),
+              ADDED_RECORDS_PROP, metrics.recordCount(),
+              ADDED_FILE_SIZE_PROP, metrics.totalSize())));
+        }
+      }
 
       return builder.build();
     }

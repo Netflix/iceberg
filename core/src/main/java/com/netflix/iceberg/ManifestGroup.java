@@ -32,7 +32,9 @@ import com.netflix.iceberg.types.Types;
 import java.io.Closeable;
 import java.util.Arrays;
 import java.util.List;
+import java.util.Objects;
 import java.util.Set;
+import java.util.function.BiFunction;
 
 class ManifestGroup {
   private static final Types.StructType EMPTY_STRUCT = Types.StructType.of();
@@ -42,6 +44,7 @@ class ManifestGroup {
   private final Expression dataFilter;
   private final Expression fileFilter;
   private final boolean ignoreDeleted;
+  private final boolean ignoreExisting;
   private final List<String> columns;
 
   private final LoadingCache<Integer, InclusiveManifestEvaluator> EVAL_CACHE = CacheBuilder
@@ -56,37 +59,55 @@ class ManifestGroup {
 
   ManifestGroup(TableOperations ops, Iterable<ManifestFile> manifests) {
     this(ops, Sets.newHashSet(manifests), Expressions.alwaysTrue(), Expressions.alwaysTrue(),
-        false, ImmutableList.of("*"));
+        false, false, ImmutableList.of("*"));
   }
 
   private ManifestGroup(TableOperations ops, Set<ManifestFile> manifests,
-                        Expression dataFilter, Expression fileFilter, boolean ignoreDeleted,
-                        List<String> columns) {
+                        Expression dataFilter, Expression fileFilter,
+                        boolean ignoreDeleted, boolean ignoreExisting, List<String> columns) {
     this.ops = ops;
     this.manifests = manifests;
     this.dataFilter = dataFilter;
     this.fileFilter = fileFilter;
     this.ignoreDeleted = ignoreDeleted;
+    this.ignoreExisting = ignoreExisting;
     this.columns = columns;
   }
 
   public ManifestGroup filterData(Expression expr) {
     return new ManifestGroup(
-        ops, manifests, Expressions.and(dataFilter, expr), fileFilter, ignoreDeleted, columns);
+        ops, manifests, Expressions.and(dataFilter, expr), fileFilter, ignoreDeleted,
+        ignoreExisting, columns);
   }
 
   public ManifestGroup filterFiles(Expression expr) {
     return new ManifestGroup(
-        ops, manifests, dataFilter, Expressions.and(fileFilter, expr), ignoreDeleted, columns);
+        ops, manifests, dataFilter, Expressions.and(fileFilter, expr), ignoreDeleted,
+        ignoreExisting, columns);
   }
 
   public ManifestGroup ignoreDeleted() {
-    return new ManifestGroup(ops, manifests, dataFilter, fileFilter, true, columns);
+    return new ManifestGroup(ops, manifests, dataFilter, fileFilter, true, ignoreExisting, columns);
+  }
+
+  public ManifestGroup ignoreDeleted(boolean ignoreDeleted) {
+    return new ManifestGroup(ops, manifests, dataFilter, fileFilter, ignoreDeleted, ignoreExisting,
+        columns);
+  }
+
+  public ManifestGroup ignoreExisting() {
+    return new ManifestGroup(ops, manifests, dataFilter, fileFilter, ignoreDeleted, true, columns);
+  }
+
+  public ManifestGroup ignoreExisting(boolean ignoreExisting) {
+    return new ManifestGroup(ops, manifests, dataFilter, fileFilter, ignoreDeleted, ignoreExisting,
+        columns);
   }
 
   public ManifestGroup select(List<String> columns) {
     return new ManifestGroup(
-        ops, manifests, dataFilter, fileFilter, ignoreDeleted, Lists.newArrayList(columns));
+        ops, manifests, dataFilter, fileFilter, ignoreDeleted, ignoreExisting,
+        Lists.newArrayList(columns));
   }
 
   public ManifestGroup select(String... columns) {
@@ -109,11 +130,21 @@ class ManifestGroup {
         manifest -> EVAL_CACHE.getUnchecked(manifest.partitionSpecId()).eval(manifest));
 
     if (ignoreDeleted) {
+      // only scan manifests that have entries other than deletes
       // remove any manifests that don't have any existing or added files. if either the added or
       // existing files count is missing, the manifest must be scanned.
       matchingManifests = Iterables.filter(manifests, manifest ->
           manifest.addedFilesCount() == null || manifest.existingFilesCount() == null ||
               manifest.addedFilesCount() + manifest.existingFilesCount() > 0);
+    }
+
+    if (ignoreExisting) {
+      // only scan manifests that have entries other than existing
+      // remove any manifests that don't have any deleted or added files. if either the added or
+      // deleted files count is missing, the manifest must be scanned.
+      matchingManifests = Iterables.filter(manifests, manifest ->
+          manifest.addedFilesCount() == null || manifest.deletedFilesCount() == null ||
+              manifest.addedFilesCount() + manifest.deletedFilesCount() > 0);
     }
 
     Iterable<Iterable<ManifestEntry>> readers = Iterables.transform(
@@ -122,9 +153,23 @@ class ManifestGroup {
           ManifestReader reader = ManifestReader.read(ops.io().newInputFile(manifest.path()));
           FilteredManifest filtered = reader.filterRows(dataFilter).select(columns);
           toClose.add(reader);
-          return Iterables.filter(
-              ignoreDeleted ? filtered.liveEntries() : filtered.allEntries(),
-              entry -> evaluator.eval((GenericDataFile) entry.file()));
+
+          Iterable<ManifestEntry> entries = filtered.allEntries();
+          if (ignoreDeleted) {
+            entries = filtered.liveEntries();
+          }
+
+          if (ignoreExisting) {
+            entries = Iterables.filter(entries,
+                entry -> entry.status() != ManifestEntry.Status.EXISTING);
+          }
+
+          if (fileFilter != null && fileFilter != Expressions.alwaysTrue()) {
+            entries = Iterables.filter(entries,
+                entry -> evaluator.eval((GenericDataFile) entry.file()));
+          }
+
+          return entries;
         });
 
     return CloseableIterable.combine(Iterables.concat(readers), toClose);
