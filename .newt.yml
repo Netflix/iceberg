@@ -1,0 +1,7 @@
+jenkins-default-job: iceberg-0.7
+jenkins-jobs:
+- iceberg-0.7
+jenkins-master: dse
+name: iceberg
+org: bdp
+spinnaker-app:

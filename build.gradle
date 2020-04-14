@@ -1,0 +1,768 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+buildscript {
+  dependencies {
+    classpath 'com.github.jengelman.gradle.plugins:shadow:5.2.0'
+    classpath 'me.champeau.gradle:jmh-gradle-plugin:0.4.8'
+  }
+}
+
+if (JavaVersion.current() != JavaVersion.VERSION_1_8) {
+  throw new GradleException("This build must be run with Java 8")
+}
+
+allprojects {
+  apply plugin: 'netflix.nebula'
+  apply plugin: 'netflix.lombok'
+  apply plugin: 'nebula.release'
+
+  nebula {
+    moduleOwner = 'BigDataPlatform@netflix.com'
+    moduleEmail = 'BigDataPlatform@netflix.com'
+  }
+
+  nebulaRelease {
+    releaseBranchPatterns = [/netflix\/0.7.0/, /netflix\/0.7.0-unstable/, /netflix\/0.7.0-spark24/]
+  }
+
+  group = "com.netflix.iceberg"
+}
+
+dependencyRecommendations {
+  mavenBom module: 'netflix.bom:runtime-platform-recommendations:latest.release'
+  mavenBom module: 'netflix.bom:bdc-recommendations:latest.release'
+  propertiesFile file: rootProject.file('versions.props')
+}
+
+task('printVersion') {
+  doLast {
+    println "${project.version}"
+  }
+}
+
+subprojects {
+  apply plugin: 'nebula.javadoc-jar'
+  apply plugin: 'nebula.source-jar'
+  apply plugin: 'java'
+
+  configurations {
+    testCompile.extendsFrom compileOnly
+    all {
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+
+    testArtifacts
+  }
+
+  compileJava {
+    options.encoding = "UTF-8"
+  }
+
+  compileTestJava {
+    options.encoding = "UTF-8"
+  }
+
+  ext {
+    jmhVersion = '1.21'
+
+    scalaVersion = '2.11'
+
+    metacatVersion = '1.3.6'
+
+    relocationPrefix = 'org.apache.iceberg.bdp.shaded'
+  }
+
+  sourceCompatibility = '1.8'
+  targetCompatibility = '1.8'
+
+  dependencies {
+    compile 'org.slf4j:slf4j-api'
+    compileOnly('com.google.guava:guava') {
+      // may be LGPL - use ALv2 findbugs-annotations instead
+      exclude group: 'com.google.code.findbugs'
+    }
+    compile 'com.github.stephenc.findbugs:findbugs-annotations:1.3.9-1'
+
+    testCompile 'junit:junit'
+    testCompile 'org.slf4j:slf4j-simple'
+    testCompile 'org.mockito:mockito-core'
+    testCompile 'com.codahale.metrics:metrics-core'
+  }
+
+  task testJar(type: Jar) {
+    archiveClassifier = 'tests'
+    from sourceSets.test.output
+  }
+  tasks.build.dependsOn tasks.testJar
+
+  artifacts {
+    archives sourceJar
+    archives javadocJar
+    archives testJar
+    testArtifacts testJar
+  }
+
+  afterEvaluate {
+    publishing {
+      publications {
+        nebulaIvy(IvyPublication) {
+          artifact(testJar)
+        }
+        nebula(MavenPublication) {
+          artifact(testJar)
+        }
+      }
+    }
+  }
+}
+
+def jmhProjects = [project("iceberg-spark")]
+
+configure(jmhProjects) {
+  apply plugin: 'me.champeau.gradle.jmh'
+
+  jmh {
+    jmhVersion = jmhVersion
+    failOnError = true
+    forceGC = true
+    includeTests = true
+    humanOutputFile = file(jmhOutputPath)
+    include = [jmhIncludeRegex]
+  }
+}
+
+project(':iceberg-api') {
+  dependencies {
+    testCompile "org.apache.avro:avro"
+    testCompile 'joda-time:joda-time'
+  }
+}
+
+project(':iceberg-common') {}
+
+project(':iceberg-core') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-common')
+
+    compile("org.apache.avro:avro") {
+      exclude group: 'org.tukaani' // xz compression is not supported
+    }
+
+    compile "com.fasterxml.jackson.core:jackson-databind"
+    compile "com.fasterxml.jackson.core:jackson-core"
+    compile "com.github.ben-manes.caffeine:caffeine"
+    compileOnly("org.apache.hadoop:hadoop-client") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+
+    testCompile project(path: ':iceberg-api', configuration: 'testArtifacts')
+  }
+}
+
+project(':iceberg-data') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-core')
+    compileOnly project(':iceberg-parquet')
+
+    testCompile("org.apache.hadoop:hadoop-client") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+
+    testCompile project(path: ':iceberg-api', configuration: 'testArtifacts')
+  }
+
+  test {
+    // Only for TestSplitScan as of Gradle 5.0+
+    maxHeapSize '1500m'
+  }
+}
+
+project(':iceberg-hive') {
+  dependencies {
+    compile project(':iceberg-core')
+
+    compileOnly "org.apache.avro:avro"
+
+    compileOnly("org.apache.hive:hive-metastore") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'org.pentaho' // missing dependency
+    }
+
+    // By default, hive-exec is a fat/uber jar and it exports a guava library
+    // that's really old. We use the core classifier to be able to override our guava
+    // version. Luckily, hive-exec seems to work okay so far with this version of guava
+    // See: https://github.com/apache/hive/blob/master/ql/pom.xml#L911 for more context.
+    testCompile("org.apache.hive:hive-exec::core") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'org.pentaho' // missing dependency
+    }
+
+    testCompile("org.apache.hive:hive-metastore") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+      exclude group: 'org.pentaho' // missing dependency
+    }
+
+    compileOnly("org.apache.hadoop:hadoop-client") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+
+    testCompile project(path: ':iceberg-api', configuration: 'testArtifacts')
+  }
+}
+
+project(':iceberg-orc') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-core')
+
+    compile("org.apache.orc:orc-core::nohive") {
+      exclude group: 'org.apache.hadoop'
+      exclude group: 'commons-lang'
+      // These artifacts are shaded and included in the orc-core fat jar
+      exclude group: 'com.google.protobuf', module: 'protobuf-java'
+      exclude group: 'org.apache.hive', module: 'hive-storage-api'
+    }
+
+    compileOnly("org.apache.hadoop:hadoop-client") {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+
+  }
+}
+
+project(':iceberg-parquet') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-core')
+
+    compile("org.apache.parquet:parquet-avro") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      // already shaded by Parquet
+      exclude group: 'it.unimi.dsi'
+      exclude group: 'org.codehaus.jackson'
+    }
+
+    compileOnly "org.apache.avro:avro"
+    compileOnly("org.apache.hadoop:hadoop-client") {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+
+    testCompile project(path: ':iceberg-core', configuration: 'testArtifacts')
+  }
+}
+
+project(':iceberg-spark') {
+  apply plugin: 'scala'
+
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-common')
+    compile project(':iceberg-core')
+    compile project(':iceberg-orc')
+    compile project(':iceberg-parquet')
+    compile project(':iceberg-hive')
+
+    compileOnly "org.apache.avro:avro"
+    compileOnly("org.apache.spark:spark-hive_$scalaVersion") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'com.netflix.iceberg', module: 'bdp-iceberg'
+    }
+
+    testCompile "org.apache.hadoop:hadoop-hdfs::tests"
+    testCompile "org.apache.hadoop:hadoop-common::tests"
+    testCompile("org.apache.hadoop:hadoop-minicluster") {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+    testCompile project(path: ':iceberg-hive', configuration: 'testArtifacts')
+    testCompile project(path: ':iceberg-api', configuration: 'testArtifacts')
+  }
+}
+
+project(':iceberg-pig') {
+  dependencies {
+    compile project(':iceberg-api')
+    compile project(':iceberg-common')
+    compile project(':iceberg-core')
+    compile project(':iceberg-parquet')
+
+    compileOnly("org.apache.pig:pig") {
+      exclude group: "junit", module: "junit"
+    }
+    compileOnly("org.apache.hadoop:hadoop-mapreduce-client-core")
+    compileOnly("org.apache.hadoop:hadoop-client") {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+
+    testCompile "org.apache.hadoop:hadoop-hdfs::tests"
+    testCompile "org.apache.hadoop:hadoop-common::tests"
+    testCompile("org.apache.hadoop:hadoop-minicluster") {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+  }
+}
+
+// the runtime jar is a self-contained artifact for testing in a notebook
+project(':iceberg-spark-runtime') {
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+//  tasks.assemble.dependsOn tasks.shadowJar
+//  tasks.install.dependsOn tasks.shadowJar
+  tasks.javadocJar.dependsOn tasks.shadowJar
+
+  configurations {
+    compileOnly {
+      // included in Spark
+      exclude group: 'org.slf4j'
+      exclude group: 'org.apache.commons'
+      exclude group: 'commons-pool'
+      exclude group: 'commons-codec'
+      exclude group: 'org.xerial.snappy'
+      exclude group: 'javax.xml.bind'
+    }
+  }
+
+  dependencies {
+    compileOnly project(':iceberg-spark')
+  }
+
+  jar {
+    archiveClassifier = 'core'
+  }
+
+  shadowJar {
+    // shade compileOnly dependencies to avoid including in transitive dependencies
+    configurations = [project.configurations.compileOnly]
+
+    zip64 true
+
+    // include the LICENSE and NOTICE files for the shaded Jar
+    from(projectDir) {
+      include 'LICENSE'
+      include 'NOTICE'
+    }
+
+    // Relocate dependencies to avoid conflicts
+    relocate 'com.google', 'org.apache.iceberg.shaded.com.google'
+    relocate 'com.fasterxml', 'org.apache.iceberg.shaded.com.fasterxml'
+    relocate 'com.github.benmanes', 'org.apache.iceberg.shaded.com.github.benmanes'
+    relocate 'org.checkerframework', 'org.apache.iceberg.shaded.org.checkerframework'
+    relocate 'org.apache.avro', 'org.apache.iceberg.shaded.org.apache.avro'
+    relocate 'avro.shaded', 'org.apache.iceberg.shaded.org.apache.avro.shaded'
+    relocate 'com.thoughtworks.paranamer', 'org.apache.iceberg.shaded.com.thoughtworks.paranamer'
+    relocate 'org.apache.parquet', 'org.apache.iceberg.shaded.org.apache.parquet'
+    relocate 'shaded.parquet', 'org.apache.iceberg.shaded.org.apache.parquet.shaded'
+    // relocate Avro's jackson dependency to share parquet-jackson locations
+    relocate 'org.codehaus.jackson', 'org.apache.iceberg.shaded.org.apache.parquet.shaded.org.codehaus.jackson'
+    relocate 'org.apache.orc', 'org.apache.iceberg.shaded.org.apache.orc'
+    relocate 'io.airlift', 'org.apache.iceberg.shaded.io.airlift'
+
+    archiveClassifier = null
+  }
+}
+
+project(':iceberg-metacat') {
+  dependencies {
+    compile project(':iceberg-data')
+    compile project(':iceberg-spark')
+    compile project(':bdp-view')
+    compile "com.netflix.metacat:metacat-netflix-client:$metacatVersion"
+    compile 'com.google.guava:guava'
+
+    compileOnly('netflix:dse-metric') {
+      transitive = false
+    }
+    compileOnly "org.apache.avro:avro"
+    compileOnly("org.apache.spark:spark-avro_$scalaVersion") {
+      exclude group: 'org.apache.avro', module: 'avro'
+    }
+    compileOnly("org.apache.spark:spark-hive_$scalaVersion") {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'com.netflix.iceberg'
+      exclude group: 'org.apache.iceberg'
+    }
+
+    compileOnly('org.apache.hadoop:hadoop-client') {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+  }
+}
+
+project(':bdp-view') {
+  apply plugin: 'netflix.spotbugs-ci'
+
+  dependencies {
+    compile project(':iceberg-core')
+    compile "com.fasterxml.jackson.core:jackson-databind"
+
+    compileOnly('org.apache.hadoop:hadoop-client') {
+      exclude group: 'org.apache.avro', module: 'avro'
+      exclude group: 'org.slf4j', module: 'slf4j-log4j12'
+    }
+
+    testCompile 'com.google.code.findbugs:annotations:3.0.1'
+  }
+}
+
+// this runtime jar is a self-contained artifact for testing in a notebook or shipping with Spark
+project(':bdp-iceberg') {
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  configurations {
+    shadow
+    compileOnly.extendsFrom shadow
+  }
+
+  shadowJar {
+    configurations = [project.configurations.shadow]
+    from(project.sourceSets.main.output)
+  }
+
+  tasks.build.dependsOn tasks.shadowJar
+  tasks.javadocJar.dependsOn tasks.shadowJar
+
+  dependencies {
+    shadow('netflix:dse-metric') {
+      transitive = false
+    }
+    shadow('com.google.guava:guava') {
+      // may be LGPL - use ALv2 findbugs-annotations instead
+      exclude group: 'com.google.code.findbugs'
+    }
+
+    shadow(project(':iceberg-metacat')) {
+      // exclude transitive dependencies provided by the Spark distribution
+      exclude group: 'org.slf4j'
+      exclude group: 'org.codehaus.jackson'
+      exclude group: 'com.thoughtworks.paranamer'
+      exclude group: 'org.xerial.snappy'
+      exclude group: 'org.tukaani'
+      exclude group: 'org.apache.commons', module: 'commons-compress'
+      exclude group: 'org.apache.parquet', module: 'parquet-column'
+      exclude group: 'org.apache.parquet', module: 'parquet-hadoop'
+      exclude group: 'org.apache.parquet', module: 'parquet-format'
+      exclude group: 'it.unimi.dsi'
+      exclude group: 'org.apache.spark'
+      exclude group: 'org.apache.orc'
+      exclude group: 'org.apache.hadoop'
+    }
+
+    shadow(project(':bdp-view')) {
+      exclude group: 'com.fasterxml.jackson.core'
+      exclude group: 'org.apache.hadoop'
+      exclude group: 'org.slf4j'
+    }
+  }
+
+  afterEvaluate {
+    publishing {
+      publications {
+        withType(IvyPublication) {
+          configurations {
+            'shadow' { extend 'runtime' }
+          }
+        }
+      }
+    }
+  }
+
+  jar {
+    archiveClassifier = 'core'
+  }
+
+  shadowJar {
+    zip64 true
+
+    // Relocate dependencies to avoid conflicts
+    relocate 'com.fasterxml', "${relocationPrefix}.com.fasterxml"
+    relocate 'org.apache.avro', "${relocationPrefix}.org.apache.avro"
+    relocate 'avro.shaded', "${relocationPrefix}.avro.shaded"
+    relocate 'org.apache.parquet.avro', "${relocationPrefix}.org.apache.parquet.avro"
+    relocate 'com.google.common', "${relocationPrefix}.com.google.common"
+    relocate 'com.thoughtworks.paranamer', 'org.apache.iceberg.shaded.com.thoughtworks.paranamer'
+
+    // Relocate Metacat dependencies to avoid conflicts in Spark
+    // Metacat needs com.fasterxml relocated, which is already done above
+    relocate 'com.netflix.metacat', "${relocationPrefix}.com.netflix.metacat"
+
+    archiveClassifier = null
+  }
+}
+
+// this runtime jar is a self-contained artifact for reading Iceberg tables from JVM apps
+project(':bdp-iceberg-client') {
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  configurations {
+    shadow
+    compileOnly.extendsFrom shadow
+  }
+
+  shadowJar {
+    configurations = [project.configurations.shadow]
+    from(project.sourceSets.main.output)
+  }
+
+  tasks.build.dependsOn tasks.shadowJar
+  tasks.javadocJar.dependsOn tasks.shadowJar
+
+  dependencies {
+    shadow('com.google.guava:guava') {
+      // may be LGPL - use ALv2 findbugs-annotations instead
+      exclude group: 'com.google.code.findbugs'
+    }
+
+    shadow(project(":iceberg-parquet")) {
+      exclude group: 'com.netflix.iceberg' // included with iceberg-data
+      exclude group: 'org.apache.iceberg' // included with iceberg-data
+      exclude group: 'org.codehaus.jackson' // included with parquet-jackson
+      exclude group: 'org.apache.avro'
+    }
+
+    shadow("com.codahale.metrics:metrics-core:3.0.1")
+    shadow("org.slf4j:jcl-over-slf4j")
+
+    shadow("org.apache.hadoop:hadoop-mapreduce-client-core") {
+      exclude group: 'commons-logging'
+      exclude group: 'org.apache.hadoop', module: 'hadoop-yarn-common'
+      exclude group: 'junit'
+      exclude group: 'io.netty'
+      exclude group: 'org.hsqldb'
+      exclude group: 'org.fusesource.leveldbjni'
+      exclude group: 'com.google.inject'
+      exclude group: 'com.google.inject.extensions'
+      exclude group: 'org.slf4j'
+      exclude group: 'org.apache.log4j'
+      exclude group: 'log4j'
+      exclude group: 'org.codehaus.jackson'
+      exclude group: 'javax.servlet'
+      exclude group: 'javax.servlet.jsp'
+      exclude group: 'com.sun.jersey'
+      exclude group: 'com.sun.jersey.contribs'
+      exclude group: 'org.mortbay.jetty'
+      exclude group: 'net.java.dev.jets3t'
+      exclude group: 'org.apache.avro'
+      exclude group: 'com.google.protobuf'
+      exclude group: 'com.google.code.gson'
+      exclude group: 'com.jcraft'
+      exclude group: 'org.apache.curator'
+      exclude group: 'com.google.code.findbugs'
+      exclude group: 'org.apache.htrace'
+      exclude group: 'org.apache.zookeeper'
+      exclude group: 'org.apache.httpcomponents'
+      exclude group: 'org.apache.directory.api'
+      exclude group: 'org.apache.directory.server'
+    }
+
+    shadow("com.netflix.bdp:bdp-s3fs") {
+      exclude group: 'commons-logging'
+      exclude group: 'org.apache.hadoop', module: 'hadoop-yarn-common'
+      exclude group: 'junit'
+      exclude group: 'io.netty'
+      exclude group: 'org.hsqldb'
+      exclude group: 'org.fusesource.leveldbjni'
+      exclude group: 'com.google.inject'
+      exclude group: 'com.google.inject.extensions'
+      exclude group: 'org.slf4j'
+      exclude group: 'org.apache.log4j'
+      exclude group: 'log4j'
+      exclude group: 'org.codehaus.jackson'
+      exclude group: 'javax.servlet'
+      exclude group: 'javax.servlet.jsp'
+      exclude group: 'com.sun.jersey'
+      exclude group: 'com.sun.jersey.contribs'
+      exclude group: 'org.mortbay.jetty'
+      exclude group: 'net.java.dev.jets3t'
+      exclude group: 'org.apache.avro'
+      exclude group: 'com.google.protobuf'
+      exclude group: 'com.google.code.gson'
+      exclude group: 'com.jcraft'
+      exclude group: 'org.apache.curator'
+      exclude group: 'com.google.code.findbugs'
+      exclude group: 'org.apache.htrace'
+      exclude group: 'org.apache.zookeeper'
+      exclude group: 'org.apache.httpcomponents'
+      exclude group: 'org.apache.directory.api'
+      exclude group: 'org.apache.directory.server'
+      exclude group: 'com.netflix.spectator'
+    }
+
+    shadow("netflix:bdp-emr-credentials") {
+      exclude group: 'org.apache.hadoop' // included with bdp-s3fs
+      exclude group: 'com.amazon.aws'    // included with bdp-s3fs
+    }
+
+    shadow(project(':iceberg-metacat')) {
+      exclude group: 'org.tukaani'
+      exclude group: 'com.thoughtworks.paranamer'
+      exclude group: 'com.netflix.iceberg', module: 'iceberg-spark'
+      exclude group: 'org.apache.iceberg', module: 'iceberg-spark'
+      // exclude transitive dependencies provided by the Spark distribution
+      exclude group: 'org.slf4j'
+      exclude group: 'org.codehaus.jackson'
+      exclude group: 'org.apache.spark'
+      exclude group: 'org.apache.orc'
+    }
+  }
+
+  jar {
+    archiveClassifier = 'core'
+  }
+
+  shadowJar {
+    zip64 true
+
+    // minimize doesn't seem to work. the excluded dependencies work, but seem
+    // to break transitive inclusion.
+//    minimize {
+//      exclude(dependency('org.apache.hadoop:hadoop-common:.*'))
+//      exclude(dependency('com.netflix.iceberg:.*:.*'))
+//      exclude(dependency('presto-s3fs:.*:.*'))
+//      exclude(dependency('netflix:bdp-emr-credentials:.*'))
+//      exclude(dependency('commons-logging:commons-logging:.*'))
+//      exclude(dependency('org.slf4j:jcl-over-slf4j:.*'))
+//    }
+
+    // this contains a fake Level class that is only used for Level.INFO
+    relocate 'org.apache.log4j', "${relocationPrefix}.org.apache.log4j"
+    relocate 'com.google.common', "${relocationPrefix}.com.google.common"
+
+    // Important: jbrotli cannot be relocated because it has native methods
+    // relocate 'org.meteogroup.jbrotli', "${relocationPrefix}.org.meteogroup.jbrotli"
+
+    // Relocate dependencies to avoid conflicts
+    relocate 'com.amazonaws', "${relocationPrefix}.com.amazonaws"
+    relocate 'software.amazon.ion', "${relocationPrefix}.software.amazon.ion"
+    relocate 'org.weakref', "${relocationPrefix}.org.weakref"
+    relocate 'org.openjdk.jol', "${relocationPrefix}.org.openjdk.jol"
+    relocate 'org.joda.time', "${relocationPrefix}.org.joda.time"
+    relocate 'com.fasterxml', "${relocationPrefix}.com.fasterxml"
+    relocate 'org.codehaus.jackson', "${relocationPrefix}.org.codehaus.jackson"
+    relocate 'org.xerial.snappy', "${relocationPrefix}.org.xerial.snappy"
+    relocate 'org.apache.commons', "${relocationPrefix}.org.apache.commons"
+    relocate 'org.apache.avro', "${relocationPrefix}.org.apache.avro"
+    relocate 'avro.shaded', "${relocationPrefix}.avro.shaded"
+    relocate 'shaded.parquet', "${relocationPrefix}.shaded.parquet"
+    relocate 'org.apache.parquet', "${relocationPrefix}.org.apache.parquet"
+    relocate 'com.codahale.metrics', "${relocationPrefix}.com.codahale.metrics"
+    relocate 'it.unimi.dsi', "${relocationPrefix}.it.unimi.dsi"
+    relocate 'io.airlift', "${relocationPrefix}.io.airlift"
+    relocate 'com.github.benmanes', "${relocationPrefix}.com.github.benmanes"
+    relocate 'org.znerd', "${relocationPrefix}.org.znerd"
+    relocate 'org.apache.http', "${relocationPrefix}.org.apache.http"
+    relocate 'com.thoughtworks.paranamer', "${relocationPrefix}.com.thoughtworks.paranamer"
+    relocate 'com.codahale.metrics', "${relocationPrefix}.com.codahale.metrics"
+    relocate('com.netflix.bdp', "${relocationPrefix}.com.netflix.bdp") {
+      exclude 'com.netflix.bdp.s3fs.*'
+    }
+
+    // Relocate Metacat dependencies to avoid conflicts in Spark
+    // Metacat needs com.fasterxml relocated, which is already done above
+    relocate 'com.netflix.metacat', "${relocationPrefix}.com.netflix.metacat"
+
+    archiveClassifier = null
+  }
+}
+
+// this runtime jar is a self-contained artifact for running Pig jobs
+project(':iceberg-pig-storage') {
+  apply plugin: 'com.github.johnrengelman.shadow'
+
+  configurations {
+    shadow
+    compileOnly.extendsFrom shadow
+  }
+
+  shadowJar {
+    configurations = [project.configurations.shadow]
+    from(project.sourceSets.main.output)
+  }
+
+  tasks.build.dependsOn tasks.shadowJar
+  tasks.javadocJar.dependsOn tasks.shadowJar
+
+  dependencies {
+    shadow('com.google.guava:guava') {
+      // may be LGPL - use ALv2 findbugs-annotations instead
+      exclude group: 'com.google.code.findbugs'
+    }
+
+    shadow(project(':iceberg-pig')) {
+      // provided by iceberg-metacat
+      exclude group: 'com.netflix.iceberg'
+      exclude group: 'org.apache.iceberg'
+    }
+
+    shadow(project(':iceberg-metacat')) {
+      // exclude transitive dependencies provided by the cluster
+      exclude group: 'org.slf4j'
+      exclude group: 'org.codehaus.jackson'
+      exclude group: 'com.thoughtworks.paranamer'
+      exclude group: 'org.xerial.snappy'
+      exclude group: 'org.tukaani'
+      exclude group: 'org.apache.commons', module: 'commons-compress'
+      exclude group: 'it.unimi.dsi'
+      exclude group: 'org.apache.spark'
+      exclude group: 'org.apache.orc'
+    }
+  }
+
+  afterEvaluate {
+    publishing {
+      publications {
+        withType(IvyPublication) {
+          configurations {
+            'shadow' { extend 'runtime' }
+          }
+        }
+      }
+    }
+  }
+
+  jar {
+    archiveClassifier = 'core'
+  }
+
+  shadowJar {
+    zip64 true
+
+    // Relocate dependencies to avoid conflicts
+    relocate 'com.fasterxml', "${relocationPrefix}.com.fasterxml"
+    relocate 'org.apache.avro', "${relocationPrefix}.org.apache.avro"
+    relocate 'avro.shaded', "${relocationPrefix}.avro.shaded"
+    relocate 'shaded.parquet', "${relocationPrefix}.shaded.parquet"
+    relocate 'org.apache.parquet', "${relocationPrefix}.org.apache.parquet"
+    relocate 'com.google.common', "${relocationPrefix}.com.google.common"
+
+    // Relocate Metacat dependencies to avoid conflicts in Spark
+    // Metacat needs com.fasterxml relocated, which is already done above
+    relocate 'com.netflix.metacat', "${relocationPrefix}.com.netflix.metacat"
+
+    archiveClassifier = null
+  }
+}

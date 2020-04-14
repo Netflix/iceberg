@@ -1,0 +1,15 @@
+Trigger:
+  cron: 00 22 * * *
+Workflow:
+  id: py.bdc.common.views.integration.tests.wf
+  name: BDC Common View Integration Tests
+  jobs:
+    - job:
+        id: py.bdc.common.views.integration.tests
+        name: BDC Common View Integration Tests
+        type: NotebookJob
+        notebook:
+          input_path: https://commuter.dynprod.netflix.net:7002/view/anorwood/notebooks/Common%20View%20Integration%20Tests.ipynb
+  notification_emails:
+    - anorwood@netflix.com
+    - bigdatacompute@netflix.com

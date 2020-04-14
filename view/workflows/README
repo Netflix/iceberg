@@ -1,0 +1,6 @@
+Meson workflow for common view integration tests
+
+Spark and Presto both support common views. These views can be created and manipulated through both the engines.
+The tests need to simulate usage scenarios such that a view may be created in one engine, its definition changed in the other engine and the view queried from the
+first engine. SQL magics in notebook provide this infrastructure. Further, a notebook can be scheduled to run at a frequent interval to catch any regressions.
+This module holds the YAML files needed by Meson. Commuter links in the YAML file are links to the notebook containing cross-engine tests.

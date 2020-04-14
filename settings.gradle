@@ -1,0 +1,53 @@
+/*
+ * Licensed to the Apache Software Foundation (ASF) under one
+ * or more contributor license agreements.  See the NOTICE file
+ * distributed with this work for additional information
+ * regarding copyright ownership.  The ASF licenses this file
+ * to you under the Apache License, Version 2.0 (the
+ * "License"); you may not use this file except in compliance
+ * with the License.  You may obtain a copy of the License at
+ *
+ *   http://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing,
+ * software distributed under the License is distributed on an
+ * "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY
+ * KIND, either express or implied.  See the License for the
+ * specific language governing permissions and limitations
+ * under the License.
+ */
+
+rootProject.name = 'iceberg'
+include 'api'
+include 'common'
+include 'core'
+include 'data'
+include 'orc'
+include 'parquet'
+include 'spark'
+include 'pig'
+include 'runtime'
+include 'hive'
+
+include 'client'
+include 'metacat'
+include 'bdp-iceberg'
+include 'pig-storage'
+include 'view'
+
+project(':api').name = 'iceberg-api'
+project(':common').name = 'iceberg-common'
+project(':core').name = 'iceberg-core'
+project(':data').name = 'iceberg-data'
+project(':orc').name = 'iceberg-orc'
+project(':parquet').name = 'iceberg-parquet'
+project(':spark').name = 'iceberg-spark'
+project(':pig').name = 'iceberg-pig'
+project(':runtime').name = 'iceberg-spark-runtime'
+project(':hive').name = 'iceberg-hive'
+
+project(':client').name = 'bdp-iceberg-client'
+project(':metacat').name = 'iceberg-metacat'
+project(':pig-storage').name = 'iceberg-pig-storage'
+project(':bdp-iceberg').name = 'bdp-iceberg'
+project(':view').name = 'bdp-view'
