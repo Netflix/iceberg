@@ -33,6 +33,10 @@ if (JavaVersion.current() != JavaVersion.VERSION_1_8) {
 }
 
 allprojects {
+    tasks.withType(Test).configureEach {
+        forkEvery = 100
+    }
+
   group = "com.netflix.iceberg"
   apply plugin: 'idea'
   version = gitVersion()
@@ -344,4 +348,3 @@ project(':iceberg-presto-runtime') {
         archiveName = "iceberg-presto-runtime-${version}.${extension}"
     }
 }
-
